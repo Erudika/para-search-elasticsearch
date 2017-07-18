@@ -37,6 +37,7 @@ import org.apache.lucene.queryparser.flexible.standard.StandardQueryParser;
 import org.elasticsearch.action.admin.cluster.node.info.NodeInfo;
 import org.elasticsearch.action.admin.cluster.node.info.NodesInfoRequest;
 import org.elasticsearch.action.admin.cluster.node.info.NodesInfoResponse;
+import org.elasticsearch.action.admin.indices.alias.IndicesAliasesRequest.AliasActions;
 import org.elasticsearch.action.admin.indices.alias.get.GetAliasesResponse;
 import org.elasticsearch.action.admin.indices.create.CreateIndexRequestBuilder;
 import org.elasticsearch.action.bulk.BulkRequestBuilder;
@@ -44,17 +45,16 @@ import org.elasticsearch.action.bulk.BulkResponse;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.client.transport.TransportClient;
 import org.elasticsearch.cluster.health.ClusterHealthStatus;
-import org.elasticsearch.cluster.metadata.AliasAction;
 import org.elasticsearch.cluster.metadata.AliasMetaData;
 import org.elasticsearch.common.collect.ImmutableOpenMap;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.transport.InetSocketTransportAddress;
+import org.elasticsearch.common.xcontent.XContentType;
 import org.elasticsearch.index.query.BoolQueryBuilder;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.index.query.RangeQueryBuilder;
-import org.elasticsearch.node.Node;
-import org.elasticsearch.node.NodeBuilder;
+import org.elasticsearch.transport.client.PreBuiltTransportClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -66,8 +66,7 @@ public final class ElasticSearchUtils {
 
 	private static final Logger logger = LoggerFactory.getLogger(ElasticSearchUtils.class);
 	private static final StandardQueryParser QUERY_PARSER = new StandardQueryParser();
-	private static Client searchClient;
-	private static Node searchNode;
+	private static TransportClient searchClient;
 	private static final String DATE_FORMAT = "epoch_millis||epoch_second||yyyy-MM-dd HH:mm:ss||"
 			+ "yyyy-MM-dd||yyyy/MM/dd||yyyyMMdd||yyyy";
 	/**
@@ -110,25 +109,22 @@ public final class ElasticSearchUtils {
 		if (searchClient != null) {
 			return searchClient;
 		}
-		boolean localNode = Config.getConfigBoolean("es.local_node", true);
-		boolean dataNode = Config.getConfigBoolean("es.data_node", true);
 		boolean corsEnabled = Config.getConfigBoolean("es.cors_enabled", !Config.IN_PRODUCTION);
 		String corsAllowOrigin = Config.getConfigParam("es.cors_allow_origin", "/https?:\\/\\/localhost(:[0-9]+)?/");
 		String esHome = Config.getConfigParam("es.dir", Paths.get(".").toAbsolutePath().normalize().toString());
 		String esHost = Config.getConfigParam("es.transportclient_host", "localhost");
 		int esPort = Config.getConfigInt("es.transportclient_port", 9300);
-		boolean useTransportClient = Config.getConfigBoolean("es.use_transportclient", false);
+		boolean useTransportClient = Config.getConfigBoolean("es.use_transportclient", true);
 
 		Settings.Builder settings = Settings.builder();
 		settings.put("node.name", getNodeName());
 		settings.put("client.transport.sniff", true);
-		settings.put("action.disable_delete_all_indices", true);
+		settings.put("action.destructive_requires_name", true);
 		settings.put("cluster.name", Config.CLUSTER_NAME);
 		settings.put("http.cors.enabled", corsEnabled);
 		settings.put("http.cors.allow-origin", corsAllowOrigin);
 		settings.put("path.home", esHome);
 		settings.put("path.data", esHome + File.separator + "data");
-		settings.put("path.work", esHome + File.separator + "work");
 		settings.put("path.logs", esHome + File.separator + "logs");
 
 		if (Config.IN_PRODUCTION) {
@@ -145,7 +141,7 @@ public final class ElasticSearchUtils {
 		}
 
 		if (useTransportClient) {
-			searchClient = TransportClient.builder().settings(settings).build();
+			searchClient = new PreBuiltTransportClient(settings.build());
 			InetSocketTransportAddress addr;
 			try {
 				addr = new InetSocketTransportAddress(InetAddress.getByName(esHost), esPort);
@@ -153,10 +149,9 @@ public final class ElasticSearchUtils {
 				addr = new InetSocketTransportAddress(InetAddress.getLoopbackAddress(), esPort);
 				logger.warn("Unknown host: " + esHost, ex);
 			}
-			((TransportClient) searchClient).addTransportAddress(addr);
+			searchClient.addTransportAddress(addr);
 		} else {
-			searchNode = NodeBuilder.nodeBuilder().settings(settings).local(localNode).data(dataNode).node().start();
-			searchClient = searchNode.client();
+			throw new UnsupportedOperationException("REST client is yet to be supported in Elasticsearch v6.");
 		}
 
 		Runtime.getRuntime().addShutdownHook(new Thread() {
@@ -166,11 +161,11 @@ public final class ElasticSearchUtils {
 		});
 		// wait for the shards to initialize - prevents NoShardAvailableActionException!
 		String timeout = Config.IN_PRODUCTION ? "1m" : "5s";
-		searchClient.admin().cluster().prepareHealth(Config.APP_NAME_NS).
+		searchClient.admin().cluster().prepareHealth(Config.getRootAppIdentifier()).
 				setWaitForGreenStatus().setTimeout(timeout).execute().actionGet();
 
-		if (!existsIndex(Config.APP_NAME_NS)) {
-			createIndex(Config.APP_NAME_NS);
+		if (!existsIndex(Config.getRootAppIdentifier())) {
+			createIndex(Config.getRootAppIdentifier());
 		}
 		return searchClient;
 	}
@@ -182,10 +177,6 @@ public final class ElasticSearchUtils {
 		if (searchClient != null) {
 			searchClient.close();
 			searchClient = null;
-		}
-		if (searchNode != null) {
-			searchNode.close();
-			searchNode = null;
 		}
 	}
 
@@ -204,12 +195,12 @@ public final class ElasticSearchUtils {
 			replicas = Config.getConfigInt("es.replicas", 0);
 		}
 		try {
-			NodeBuilder nb = NodeBuilder.nodeBuilder();
-			nb.settings().put("number_of_shards", Integer.toString(shards));
-			nb.settings().put("number_of_replicas", Integer.toString(replicas));
-			nb.settings().put("auto_expand_replicas", Config.getConfigParam("es.auto_expand_replicas", "0-1"));
-			nb.settings().put("analysis.analyzer.default.type", "standard");
-			nb.settings().putArray("analysis.analyzer.default.stopwords",
+			Settings.Builder settings = Settings.builder();
+			settings.put("number_of_shards", Integer.toString(shards));
+			settings.put("number_of_replicas", Integer.toString(replicas));
+			settings.put("auto_expand_replicas", Config.getConfigParam("es.auto_expand_replicas", "0-1"));
+			settings.put("analysis.analyzer.default.type", "standard");
+			settings.putArray("analysis.analyzer.default.stopwords",
 					"arabic", "armenian", "basque", "brazilian", "bulgarian", "catalan",
 					"czech", "danish", "dutch", "english", "finnish", "french", "galician",
 					"german", "greek", "hindi", "hungarian", "indonesian", "italian",
@@ -217,10 +208,10 @@ public final class ElasticSearchUtils {
 					"swedish", "turkish");
 
 			CreateIndexRequestBuilder create = getClient().admin().indices().prepareCreate(name).
-					setSettings(nb.settings().build());
+					setSettings(settings.build());
 
 			// default system mapping (all the rest are dynamic)
-			create.addMapping("_default_", DEFAULT_MAPPING);
+			create.addMapping("_default_", DEFAULT_MAPPING, XContentType.JSON);
 			create.execute().actionGet();
 			logger.info("Created a new index '{}' with {} shards, {} replicas.", name, shards, replicas);
 		} catch (Exception e) {
@@ -255,7 +246,9 @@ public final class ElasticSearchUtils {
 		if (created) {
 			boolean aliased = addIndexAlias(name, appid);
 			if (!aliased) {
-				logger.warn("Index '{}' was created but not aliased to '{}'.", name, appid);
+				logger.warn("Created ES index '{}' without an alias '{}'.", name, appid);
+			} else {
+				logger.warn("Created ES index '{}' with alias '{}'.", name, appid);
 			}
 		}
 		return created;
@@ -271,7 +264,7 @@ public final class ElasticSearchUtils {
 			return false;
 		}
 		try {
-			logger.info("Deleted index '{}'.", appid);
+			logger.info("Deleted ES index '{}'.", appid);
 			getClient().admin().indices().prepareDelete(appid).execute().actionGet();
 		} catch (Exception e) {
 			logger.warn(null, e);
@@ -387,19 +380,10 @@ public final class ElasticSearchUtils {
 	 * Returns information about a cluster.
 	 * @return a map of key value pairs containing cluster information
 	 */
-	public static Map<String, String> getSearchClusterInfo() {
+	public static Map<String, NodeInfo> getSearchClusterInfo() {
 		Map<String, String> md = new HashMap<String, String>();
 		NodesInfoResponse res = getClient().admin().cluster().nodesInfo(new NodesInfoRequest().all()).actionGet();
-		md.put("cluser.name", res.getClusterName().toString());
-
-		for (NodeInfo nodeInfo : res) {
-			md.put("node.name", nodeInfo.getNode().getName());
-			md.put("node.address", nodeInfo.getNode().getAddress().toString());
-			md.put("node.data", Boolean.toString(nodeInfo.getNode().isDataNode()));
-			md.put("node.client", Boolean.toString(nodeInfo.getNode().isClientNode()));
-			md.put("node.version", nodeInfo.getNode().getVersion().toString());
-		}
-		return md;
+		return res.getNodesMap();
 	}
 
 	/**
@@ -409,28 +393,13 @@ public final class ElasticSearchUtils {
 	 * @return true if acknowledged
 	 */
 	public static boolean addIndexAlias(String indexName, String alias) {
-		return addIndexAlias(indexName, alias, false);
-	}
-
-	/**
-	 * Adds a new alias to an existing index.
-	 * @param indexName the index name
-	 * @param alias the alias
-	 * @param setRouting if true will route by appid (alias)
-	 * @return true if acknowledged
-	 */
-	public static boolean addIndexAlias(String indexName, String alias, boolean setRouting) {
 		if (!existsIndex(indexName)) {
 			return false;
 		}
 		try {
-			AliasAction act = new AliasAction(AliasAction.Type.ADD, indexName, alias);
-			if (setRouting) {
-				act.searchRouting(alias);
-				act.indexRouting(alias);
-				act.filter(QueryBuilders.termQuery(Config._APPID, alias));
-			}
-			return getClient().admin().indices().prepareAliases().addAliasAction(act).
+			return getClient().admin().indices().prepareAliases().addAliasAction(AliasActions.add().
+					index(indexName).alias(alias).searchRouting(alias).indexRouting(alias).
+					filter(QueryBuilders.termQuery(Config._APPID, alias))).
 					execute().actionGet().isAcknowledged();
 		} catch (Exception e) {
 			logger.error(null, e);

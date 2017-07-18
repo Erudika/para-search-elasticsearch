@@ -21,7 +21,6 @@ import com.erudika.para.core.App;
 import com.erudika.para.core.ParaObject;
 import com.erudika.para.core.Tag;
 import com.erudika.para.persistence.DAO;
-import com.erudika.para.search.SearchTest;
 import static com.erudika.para.search.SearchTest.u;
 import com.erudika.para.utils.Config;
 import java.util.HashMap;
@@ -43,10 +42,10 @@ public class ElasticSearchIT extends SearchTest {
 	public static void setUpClass() {
 		System.setProperty("para.env", "embedded");
 		System.setProperty("para.app_name", "para-test");
-		System.setProperty("para.cluster_name", "para-test");
+		System.setProperty("para.cluster_name", "test");
 		System.setProperty("para.es.shards", "2");
 		s = new ElasticSearch(mock(DAO.class));
-		ElasticSearchUtils.createIndex(Config.APP_NAME_NS);
+		ElasticSearchUtils.createIndex(Config.getRootAppIdentifier());
 		ElasticSearchUtils.createIndex(appid1);
 		ElasticSearchUtils.createIndex(appid2);
 		ElasticSearchUtils.createIndex("root-index");
@@ -55,7 +54,7 @@ public class ElasticSearchIT extends SearchTest {
 
 	@AfterClass
 	public static void tearDownClass() {
-//		ElasticSearchUtils.deleteIndex(Config.APP_NAME_NS);
+		ElasticSearchUtils.deleteIndex(Config.getRootAppIdentifier());
 		ElasticSearchUtils.deleteIndex(appid1);
 		ElasticSearchUtils.deleteIndex(appid2);
 		ElasticSearchUtils.deleteIndex("root-index");
@@ -127,10 +126,11 @@ public class ElasticSearchIT extends SearchTest {
 		String root = "root-index";
 
 		App rootApp = new App("rootapp");
+		rootApp.setAppid(root);
 		s.index(root, rootApp);
 
-		assertTrue(ElasticSearchUtils.addIndexAlias(root, app1, true));
-		assertTrue(ElasticSearchUtils.addIndexAlias(root, app2, true));
+		assertTrue(ElasticSearchUtils.addIndexAlias(root, app1));
+		assertTrue(ElasticSearchUtils.addIndexAlias(root, app2));
 
 		Tag t1 = new Tag("t1");
 		Tag t2 = new Tag("t2");
@@ -151,7 +151,7 @@ public class ElasticSearchIT extends SearchTest {
 
 		// top view of all docs in shared index
 		assertEquals(1, s.getCount(root, "app").intValue());
-		assertEquals(3, s.getCount(root, "tag").intValue());
+		assertEquals(0, s.getCount(root, "tag").intValue());
 		// local view for each app space
 		assertEquals(2, s.getCount(app1, "tag").intValue());
 		assertEquals(1, s.getCount(app2, "tag").intValue());

@@ -18,13 +18,11 @@
 package com.erudika.para.search;
 
 import com.erudika.para.core.Address;
-import com.erudika.para.core.App;
 import com.erudika.para.core.ParaObject;
 import com.erudika.para.core.utils.ParaObjectUtils;
 import com.erudika.para.core.Tag;
 import com.erudika.para.core.utils.CoreUtils;
 import com.erudika.para.persistence.DAO;
-import com.erudika.para.search.Search;
 import static com.erudika.para.search.ElasticSearchUtils.getIndexName;
 import static com.erudika.para.search.ElasticSearchUtils.getTermsQuery;
 import static com.erudika.para.search.ElasticSearchUtils.isAsyncEnabled;
@@ -41,16 +39,13 @@ import java.util.Map;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import org.apache.commons.lang3.StringUtils;
+import static org.apache.lucene.search.join.ScoreMode.Avg;
 import org.elasticsearch.action.bulk.BulkRequestBuilder;
 import org.elasticsearch.action.bulk.BulkResponse;
 import org.elasticsearch.action.delete.DeleteRequest;
 import org.elasticsearch.action.delete.DeleteRequestBuilder;
 import org.elasticsearch.action.get.GetRequestBuilder;
 import org.elasticsearch.action.get.GetResponse;
-import org.elasticsearch.action.get.MultiGetItemResponse;
-import org.elasticsearch.action.get.MultiGetRequest;
-import org.elasticsearch.action.get.MultiGetRequestBuilder;
-import org.elasticsearch.action.get.MultiGetResponse;
 import org.elasticsearch.action.index.IndexRequestBuilder;
 import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.elasticsearch.action.search.SearchResponse;
@@ -60,11 +55,11 @@ import org.elasticsearch.common.unit.DistanceUnit;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.index.IndexNotFoundException;
 import org.elasticsearch.index.query.BoolQueryBuilder;
+import org.elasticsearch.index.query.MoreLikeThisQueryBuilder.Item;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHits;
-import org.elasticsearch.search.fetch.source.FetchSourceContext;
 import org.elasticsearch.search.sort.SortBuilder;
 import org.elasticsearch.search.sort.SortBuilders;
 import org.elasticsearch.search.sort.SortOrder;
@@ -109,12 +104,6 @@ public class ElasticSearch implements Search {
 
 	@Override
 	public void index(String appid, ParaObject po) {
-		index(appid, po, 0);
-	}
-
-	@Override
-	@Deprecated
-	public void index(String appid, ParaObject po, long ttl) {
 		if (po == null || StringUtils.isBlank(appid)) {
 			return;
 		}
@@ -122,9 +111,6 @@ public class ElasticSearch implements Search {
 		try {
 			IndexRequestBuilder irb = client().prepareIndex(getIndexName(appid), po.getType(), po.getId()).
 					setSource(data);
-			if (ttl > 0) {
-				irb.setTTL(ttl);
-			}
 			if (isAsyncEnabled()) {
 				irb.execute();
 			} else {
@@ -249,22 +235,8 @@ public class ElasticSearch implements Search {
 			return list;
 		}
 		try {
-			String aid = getIndexName(appid);
-			boolean hasRouting = !App.isRoot(aid) && ElasticSearchUtils.existsIndexAlias(Config.APP_NAME_NS, aid);
-			MultiGetRequestBuilder mgr = client().prepareMultiGet();
-			for (String id : ids) {
-				mgr.add(new MultiGetRequest.Item(aid, null, id).
-						fetchSourceContext(FetchSourceContext.FETCH_SOURCE).
-						routing(hasRouting ? aid : null));
-			}
-
-			MultiGetResponse response = mgr.execute().actionGet();
-			for (MultiGetItemResponse multiGetItemResponse : response.getResponses()) {
-				GetResponse res = multiGetItemResponse.getResponse();
-				if (res.isExists() && !res.isSourceEmpty()) {
-					list.add((P) ParaObjectUtils.setAnnotatedFields(res.getSource()));
-				}
-			}
+			QueryBuilder qb = QueryBuilders.termsQuery(Config._ID, ids);
+			return searchQuery(appid, null, qb);
 		} catch (Exception e) {
 			logger.warn(null, e);
 		}
@@ -307,7 +279,7 @@ public class ElasticSearch implements Search {
 			return Collections.emptyList();
 		}
 		String queryString = "nstd." + field + ":" + query;
-		QueryBuilder qb = QueryBuilders.nestedQuery("nstd", QueryBuilders.queryStringQuery(qs(queryString)));
+		QueryBuilder qb = QueryBuilders.nestedQuery("nstd", QueryBuilders.queryStringQuery(qs(queryString)), Avg);
 		return searchQuery(appid, type, qb, pager);
 	}
 
@@ -363,9 +335,10 @@ public class ElasticSearch implements Search {
 		QueryBuilder qb;
 
 		if (fields == null || fields.length == 0) {
-			qb = QueryBuilders.moreLikeThisQuery().like(liketext).minDocFreq(1).minTermFreq(1);
+			qb = QueryBuilders.moreLikeThisQuery(new String[]{liketext}).minDocFreq(1).minTermFreq(1);
 		} else {
-			qb = QueryBuilders.moreLikeThisQuery(fields).like(liketext).minDocFreq(1).minTermFreq(1);
+			qb = QueryBuilders.moreLikeThisQuery(fields, new String[]{liketext}, Item.EMPTY_ARRAY).
+					minDocFreq(1).minTermFreq(1);
 		}
 
 		if (!StringUtils.isBlank(filterKey)) {
@@ -408,16 +381,16 @@ public class ElasticSearch implements Search {
 		}
 
 		// then find their parent objects
-		ArrayList<String> parentids = new ArrayList<String>(hits1.getHits().length);
+		String[] parentids = new String[hits1.getHits().length];
 		for (int i = 0; i < hits1.getHits().length; i++) {
 			Object pid = hits1.getAt(i).getSource().get(Config._PARENTID);
 			if (pid != null) {
-				parentids.add((String) pid);
+				parentids[i] = (String) pid;
 			}
 		}
 
 		QueryBuilder qb2 = QueryBuilders.boolQuery().must(QueryBuilders.queryStringQuery(qs(query))).
-				filter(QueryBuilders.idsQuery(type).ids(parentids));
+				filter(QueryBuilders.idsQuery(type).addIds(parentids));
 		SearchHits hits2 = searchQueryRaw(appid, type, qb2, pager);
 
 		return searchQuery(appid, hits2);
@@ -498,7 +471,7 @@ public class ElasticSearch implements Search {
 		}
 		Pager page = ElasticSearchUtils.getPager(pager);
 		SortOrder order = page.isDesc() ? SortOrder.DESC : SortOrder.ASC;
-		SortBuilder sort = StringUtils.isBlank(page.getSortby()) ?
+		SortBuilder<?> sort = StringUtils.isBlank(page.getSortby()) ?
 				SortBuilders.scoreSort() : SortBuilders.fieldSort(page.getSortby()).order(order);
 
 		int max = page.getLimit();
@@ -625,102 +598,102 @@ public class ElasticSearch implements Search {
 
 	@Override
 	public void index(ParaObject so) {
-		index(Config.APP_NAME_NS, so);
+		index(Config.getRootAppIdentifier(), so);
 	}
 
 	@Override
 	public void unindex(ParaObject so) {
-		unindex(Config.APP_NAME_NS, so);
+		unindex(Config.getRootAppIdentifier(), so);
 	}
 
 	@Override
 	public <P extends ParaObject> void indexAll(List<P> objects) {
-		indexAll(Config.APP_NAME_NS, objects);
+		indexAll(Config.getRootAppIdentifier(), objects);
 	}
 
 	@Override
 	public <P extends ParaObject> void unindexAll(List<P> objects) {
-		unindexAll(Config.APP_NAME_NS, objects);
+		unindexAll(Config.getRootAppIdentifier(), objects);
 	}
 
 	@Override
 	public void unindexAll(Map<String, ?> terms, boolean matchAll) {
-		unindexAll(Config.APP_NAME_NS, terms, matchAll);
+		unindexAll(Config.getRootAppIdentifier(), terms, matchAll);
 	}
 
 	@Override
 	public <P extends ParaObject> P findById(String id) {
-		return findById(Config.APP_NAME_NS, id);
+		return findById(Config.getRootAppIdentifier(), id);
 	}
 
 	@Override
 	public <P extends ParaObject> List<P> findByIds(List<String> ids) {
-		return findByIds(Config.APP_NAME_NS, ids);
+		return findByIds(Config.getRootAppIdentifier(), ids);
 	}
 
 	@Override
 	public <P extends ParaObject> List<P> findNearby(String type,
 			String query, int radius, double lat, double lng, Pager... pager) {
-		return findNearby(Config.APP_NAME_NS, type, query, radius, lat, lng, pager);
+		return findNearby(Config.getRootAppIdentifier(), type, query, radius, lat, lng, pager);
 	}
 
 	@Override
 	public <P extends ParaObject> List<P> findPrefix(String type, String field, String prefix, Pager... pager) {
-		return findPrefix(Config.APP_NAME_NS, type, field, prefix, pager);
+		return findPrefix(Config.getRootAppIdentifier(), type, field, prefix, pager);
 	}
 
 	@Override
 	public <P extends ParaObject> List<P> findQuery(String type, String query, Pager... pager) {
-		return findQuery(Config.APP_NAME_NS, type, query, pager);
+		return findQuery(Config.getRootAppIdentifier(), type, query, pager);
 	}
 
 	@Override
 	public <P extends ParaObject> List<P> findNestedQuery(String type, String field, String query, Pager... pager) {
-		return findNestedQuery(Config.APP_NAME_NS, type, field, query, pager);
+		return findNestedQuery(Config.getRootAppIdentifier(), type, field, query, pager);
 	}
 
 	@Override
 	public <P extends ParaObject> List<P> findSimilar(String type, String filterKey, String[] fields,
 			String liketext, Pager... pager) {
-		return findSimilar(Config.APP_NAME_NS, type, filterKey, fields, liketext, pager);
+		return findSimilar(Config.getRootAppIdentifier(), type, filterKey, fields, liketext, pager);
 	}
 
 	@Override
 	public <P extends ParaObject> List<P> findTagged(String type, String[] tags, Pager... pager) {
-		return findTagged(Config.APP_NAME_NS, type, tags, pager);
+		return findTagged(Config.getRootAppIdentifier(), type, tags, pager);
 	}
 
 	@Override
 	public <P extends ParaObject> List<P> findTags(String keyword, Pager... pager) {
-		return findTags(Config.APP_NAME_NS, keyword, pager);
+		return findTags(Config.getRootAppIdentifier(), keyword, pager);
 	}
 
 	@Override
 	public <P extends ParaObject> List<P> findTermInList(String type, String field,
 			List<?> terms, Pager... pager) {
-		return findTermInList(Config.APP_NAME_NS, type, field, terms, pager);
+		return findTermInList(Config.getRootAppIdentifier(), type, field, terms, pager);
 	}
 
 	@Override
 	public <P extends ParaObject> List<P> findTerms(String type, Map<String, ?> terms,
 			boolean mustMatchBoth, Pager... pager) {
-		return findTerms(Config.APP_NAME_NS, type, terms, mustMatchBoth, pager);
+		return findTerms(Config.getRootAppIdentifier(), type, terms, mustMatchBoth, pager);
 	}
 
 	@Override
 	public <P extends ParaObject> List<P> findWildcard(String type, String field, String wildcard,
 			Pager... pager) {
-		return findWildcard(Config.APP_NAME_NS, type, field, wildcard, pager);
+		return findWildcard(Config.getRootAppIdentifier(), type, field, wildcard, pager);
 	}
 
 	@Override
 	public Long getCount(String type) {
-		return getCount(Config.APP_NAME_NS, type);
+		return getCount(Config.getRootAppIdentifier(), type);
 	}
 
 	@Override
 	public Long getCount(String type, Map<String, ?> terms) {
-		return getCount(Config.APP_NAME_NS, type, terms);
+		return getCount(Config.getRootAppIdentifier(), type, terms);
 	}
 
 }

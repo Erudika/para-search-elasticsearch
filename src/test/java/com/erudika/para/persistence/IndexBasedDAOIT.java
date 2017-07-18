@@ -29,7 +29,7 @@ import org.junit.BeforeClass;
  */
 public class IndexBasedDAOIT extends DAOTest {
 
-	private static final String ROOT_APP_NAME = "para-test";
+	private static final String ROOT_APP_NAME = "para-test-dao";
 
 	public IndexBasedDAOIT() {
 		super(get());
@@ -46,7 +46,7 @@ public class IndexBasedDAOIT extends DAOTest {
 	public static void setUpClass() {
 		System.setProperty("para.env", "embedded");
 		System.setProperty("para.app_name", ROOT_APP_NAME);
-		System.setProperty("para.cluster_name", "para-test");
+		System.setProperty("para.cluster_name", "test");
 
 		ElasticSearchUtils.createIndex(ROOT_APP_NAME);
 		ElasticSearchUtils.createIndex(appid1);
@@ -56,7 +56,7 @@ public class IndexBasedDAOIT extends DAOTest {
 
 	@AfterClass
 	public static void tearDownClass() {
-//		ElasticSearchUtils.deleteIndex(ROOT_APP_NAME);
+		ElasticSearchUtils.deleteIndex(ROOT_APP_NAME);
 		ElasticSearchUtils.deleteIndex(appid1);
 		ElasticSearchUtils.deleteIndex(appid2);
 		ElasticSearchUtils.deleteIndex(appid3);

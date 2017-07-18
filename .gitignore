@@ -16,3 +16,4 @@ nb-configuration.xml
 **/target/
 **/data/
 settings.xml
+dependency-reduced-pom.xml

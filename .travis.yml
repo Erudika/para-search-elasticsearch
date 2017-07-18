@@ -1,4 +1,7 @@
 language: java
+sudo: true
+before_script:
+  - sudo sysctl -w vm.max_map_count=262144
 jdk:
   - oraclejdk8
 after_success:
@@ -11,4 +14,3 @@ notifications:
     on_success: change
     on_failure: always
     on_start: never
-    

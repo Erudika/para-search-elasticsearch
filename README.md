@@ -30,6 +30,8 @@ The plugin is on Maven Central. Here's the Maven snippet to include in your `pom
   <version>{VERSION}</version>
 </dependency>
 ```
+Alternatively you can download the JAR from the "Releases" tab above put it in a `lib` folder alongside the server
+WAR file `para-x.y.z.war`. Para will look for plugins inside `lib` and pick up the Elasticsearch plugin.
 
 ### Configuration
 
@@ -42,8 +44,6 @@ para.es.cors_enabled = false
 para.es.cors_allow_origin = "localhost"
 para.es.discovery_type = "ec2"
 para.es.discovery_group = "elasticsearch"
-para.es.local_node = true
-para.es.data_node = true
 para.es.shards = 5
 para.es.replicas = 0
 para.es.dir = "data"
@@ -59,11 +59,6 @@ para.search = "ElasticSearch"
 ```
 This could be a Java system property or part of a `application.conf` file on the classpath.
 This tells Para to use the Elasticsearch implementation instead of the default.
-
-
-Alternatively you can build the project with `mvn clean install` and unzip the file `target/para-search-elasticsearch.zip`
-into a `lib` folder alongside the server WAR file `para-server.war`. Para will look for plugins inside `lib`
-and pick up the Elasticsearch plugin.
 
 ### Requirements
 
