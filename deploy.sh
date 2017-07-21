@@ -1,7 +1,9 @@
 #!/bin/bash
 read -e -p "Tag: " ver
-sed -i -e "s/\"version\":.*/\"version\": "\"$ver\"",/g" package.json
 git add -A && git commit -m "Release v$ver."
-git tag "v$ver"
+git tag "$ver"
 git push origin master && git push --tags
-npm publish
+
+echo "v$ver \n" > changelog.txt
+git log $ver..HEAD --oneline >> changelog.txt
+hub release create -F changelog.txt -a target/para-search-elasticsearch-*.jar 

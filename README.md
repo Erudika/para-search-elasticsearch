@@ -27,7 +27,7 @@ The plugin is on Maven Central. Here's the Maven snippet to include in your `pom
 <dependency>
   <groupId>com.erudika</groupId>
   <artifactId>para-search-elasticsearch</artifactId>
-  <version>{VERSION}</version>
+  <version>{see_green_version_badge_above}</version>
 </dependency>
 ```
 Alternatively you can download the JAR from the "Releases" tab above put it in a `lib` folder alongside the server
