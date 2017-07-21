@@ -8,6 +8,6 @@ git log $lastver..HEAD --oneline >> changelog.txt
 echo "" >> changelog.txt
 echo "" >> changelog.txt
 echo "[Download JAR](https://oss.sonatype.org/service/local/repositories/releases/content/com/erudika/para-search-elasticsearch/${ver}/para-search-elasticsearch-${ver}-shaded.jar)" >> changelog.txt
-hub release create -F changelog.txt
+hub release create -F changelog.txt $ver
 cat changelog.txt
 rm changelog.txt
