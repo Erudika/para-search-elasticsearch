@@ -4,7 +4,7 @@
 
 	<groupId>com.erudika</groupId>
 	<artifactId>para-search-elasticsearch</artifactId>
-	<version>1.25.2-SNAPSHOT</version>
+	<version>1.25.1-SNAPSHOT</version>
 	<packaging>jar</packaging>
 
 	<name>Para Elasticsearch Plugin</name>
