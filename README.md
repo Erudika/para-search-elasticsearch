@@ -53,12 +53,12 @@ para.es.transportclient_host = "localhost"
 para.es.transportclient_port = 9300
 ```
 
-Add the project as dependency through Maven and set the config property
+Finally, set the config property:
 ```
 para.search = "ElasticSearch"
 ```
 This could be a Java system property or part of a `application.conf` file on the classpath.
-This tells Para to use the Elasticsearch implementation instead of the default.
+This tells Para to use the Elasticsearch implementation instead of the default (Lucene).
 
 ### Requirements
 

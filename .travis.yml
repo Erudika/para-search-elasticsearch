@@ -1,11 +1,22 @@
 language: java
 sudo: true
+install: true
 before_script:
   - sudo sysctl -w vm.max_map_count=262144
 jdk:
   - oraclejdk8
-after_success:
-  - mvn clean verify
+script:
+  - jdk_switcher use oraclejdk8
+  - mvn clean install sonar:sonar
+addons:
+  sonarcloud:
+    organization: "erudika"
+    token:
+      secure: "puAvrHrNa7jIEMUhLy+RD+cNRwH9TO2Q61KD9dHKqEwrMGr7r/o/BotX3SdDlkONB6EZc+eNilJbwrZWcTDjEJ5aNo0dYkpdiomiX11xACvrARqZeNHjQWbIqsl0vdABEFd3VZPP2Gvw1wmW4zzWwBemvSIfr3eCK3TFeQPH2OpSJV01fmoXz6UYv+tfZZLxfoM1LF9eyjMXQaVkymYB/CaiO1eJ796UGv7pboylvHct8LQ+mIZqSywbndO2wUhpVjjMW6xXSEfElJ0pWTyCtECf2J3cpByN2pKKKMJXpVKPGs0DP6KbGw1ZkUPb8vH9VW3w6imezFicMWX8/LDvZ6v4lA3pvNpsraDWlpJMkOJYpQRGBQJinF66rEr4+YZAj2007Ad0XWy/MY9XlIXAVjIwnZsQ1qUmNz5ag1p3RbWm+uLmGACC9f/euWg7nTHCeIw70LmvcVc5dMR5DHzu0e4Wyw3iM5DF0UAbly6tOaD4Q6BzN04N5l4W4FAUdYux35yHYO6Chs6RjSbNSUebd13WIyrU7xNGfZGCB87zPK34bQNLNk0nmXFfBwTKqXD+6vrQdylyXS8trdSAvc+PVYl5Bjy5C2byz+MbklnoZOuBm6lsMbyks57ijUMMkLrgi/HjKmuJJclPt9iJXWTdAX6cEOVx9rtmUqZITtPMK1Q="
+cache:
+  directories:
+    - '$HOME/.m2/repository'
+    - '$HOME/.sonar/cache'
 notifications:
   email: false
   webhooks:
