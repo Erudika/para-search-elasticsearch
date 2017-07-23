@@ -1,8 +1,17 @@
 #!/bin/bash
-echo "Run mvn release:perform first!"
-read -e -p "Tag: " ver
-read -e -p "Last tag: " lastver
+echo "Listing all tags:"
+git tag
+echo "---"
+read -e -p "Version tag: " ver
+read -e -p "Last version tag: " lastver
+read -e -p "New dev version: " devver
+
 git add -A && git commit -m "Release v$ver." && git push origin master
+
+mvn --batch-mode -Dtag=${ver} release:prepare -DreleaseVersion=${ver} -DdevelopmentVersion=${devver}-SNAPSHOT && \
+mvn release:perform
+
+echo "Maven release done, publishing release on GitHub..,"
 echo "v$ver" > changelog.txt
 echo "" >> changelog.txt
 git log $lastver..HEAD --oneline >> changelog.txt
