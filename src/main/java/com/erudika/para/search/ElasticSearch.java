@@ -17,7 +17,10 @@
  */
 package com.erudika.para.search;
 
+import com.erudika.para.AppCreatedListener;
+import com.erudika.para.AppDeletedListener;
 import com.erudika.para.core.Address;
+import com.erudika.para.core.App;
 import com.erudika.para.core.ParaObject;
 import com.erudika.para.core.utils.ParaObjectUtils;
 import com.erudika.para.core.Tag;
@@ -76,17 +79,40 @@ public class ElasticSearch implements Search {
 	private static final Logger logger = LoggerFactory.getLogger(ElasticSearch.class);
 	private DAO dao;
 
-	static {
-		if (Config.isSearchEnabled()) {
-			ElasticSearchUtils.getClient();
-		}
-	}
-
 	/**
 	 * No-args constructor.
 	 */
 	public ElasticSearch() {
 		this(CoreUtils.getInstance().getDao());
+		if (Config.isSearchEnabled()) {
+			ElasticSearchUtils.getClient();
+		}
+		// set up automatic index creation and deletion
+		App.addAppCreatedListener(new AppCreatedListener() {
+			public void onAppCreated(App app) {
+				if (app != null) {
+					String appid = app.getAppIdentifier();
+					if (app.isSharingIndex()) {
+						ElasticSearchUtils.addIndexAlias(Config.getRootAppIdentifier(), appid);
+					} else {
+						ElasticSearchUtils.createIndex(appid);
+					}
+				}
+			}
+		});
+		App.addAppDeletedListener(new AppDeletedListener() {
+			public void onAppDeleted(App app) {
+				if (app != null) {
+					String appid = app.getAppIdentifier();
+					if (app.isSharingIndex()) {
+						CoreUtils.getInstance().getSearch().unindexAll(appid, null, true);
+						ElasticSearchUtils.removeIndexAlias(Config.getRootAppIdentifier(), appid);
+					} else {
+						ElasticSearchUtils.deleteIndex(appid);
+					}
+				}
+			}
+		});
 	}
 
 	/**
