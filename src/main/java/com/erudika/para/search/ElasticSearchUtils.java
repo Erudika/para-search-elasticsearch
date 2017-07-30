@@ -23,10 +23,8 @@ import com.erudika.para.persistence.DAO;
 import com.erudika.para.utils.Config;
 import com.erudika.para.utils.Pager;
 import com.erudika.para.utils.Utils;
-import java.io.File;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -109,36 +107,13 @@ public final class ElasticSearchUtils {
 		if (searchClient != null) {
 			return searchClient;
 		}
-		boolean corsEnabled = Config.getConfigBoolean("es.cors_enabled", !Config.IN_PRODUCTION);
-		String corsAllowOrigin = Config.getConfigParam("es.cors_allow_origin", "/https?:\\/\\/localhost(:[0-9]+)?/");
-		String esHome = Config.getConfigParam("es.dir", Paths.get(".").toAbsolutePath().normalize().toString());
 		String esHost = Config.getConfigParam("es.transportclient_host", "localhost");
 		int esPort = Config.getConfigInt("es.transportclient_port", 9300);
 		boolean useTransportClient = Config.getConfigBoolean("es.use_transportclient", true);
 
 		Settings.Builder settings = Settings.builder();
-		settings.put("node.name", getNodeName());
 		settings.put("client.transport.sniff", true);
-		settings.put("action.destructive_requires_name", true);
 		settings.put("cluster.name", Config.CLUSTER_NAME);
-		settings.put("http.cors.enabled", corsEnabled);
-		settings.put("http.cors.allow-origin", corsAllowOrigin);
-		settings.put("path.home", esHome);
-		settings.put("path.data", esHome + File.separator + "data");
-		settings.put("path.logs", esHome + File.separator + "logs");
-
-		if (Config.IN_PRODUCTION) {
-			String discoveryType = Config.getConfigParam("es.discovery_type", "ec2");
-			settings.put("cloud.aws.access_key", Config.AWS_ACCESSKEY);
-			settings.put("cloud.aws.secret_key", Config.AWS_SECRETKEY);
-			settings.put("cloud.aws.region", Config.AWS_REGION);
-			settings.put("network.tcp.keep_alive", true);
-			settings.put("discovery.type", discoveryType);
-			settings.put("discovery.ec2.ping_timeout", "10s");
-			if ("ec2".equals(discoveryType)) {
-				settings.put("discovery.ec2.groups", Config.getConfigParam("es.discovery_group", "elasticsearch"));
-			}
-		}
 
 		if (useTransportClient) {
 			searchClient = new PreBuiltTransportClient(settings.build());
@@ -178,10 +153,6 @@ public final class ElasticSearchUtils {
 			searchClient.close();
 			searchClient = null;
 		}
-	}
-
-	private static String getNodeName() {
-		return Config.PARA.concat("-es-").concat(Config.WORKER_ID);
 	}
 
 	private static boolean createIndexWithoutAlias(String name, int shards, int replicas) {
