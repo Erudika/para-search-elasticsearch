@@ -95,7 +95,7 @@ public class ElasticSearchIT extends SearchTest {
 	@Test
 	public void testGetIndexNameForAlias() throws InterruptedException {
 		ElasticSearchUtils.createIndex("test-index");
-		assertNull(ElasticSearchUtils.getIndexNameForAlias(""));
+		assertEquals("", ElasticSearchUtils.getIndexNameForAlias(""));
 		assertEquals("test-index_1", ElasticSearchUtils.getIndexNameForAlias("test-index"));
 		ElasticSearchUtils.deleteIndex("test-index");
 	}

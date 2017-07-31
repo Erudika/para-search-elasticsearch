@@ -25,7 +25,6 @@ import com.erudika.para.utils.Pager;
 import com.erudika.para.utils.Utils;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -212,14 +211,14 @@ public final class ElasticSearchUtils {
 		if (StringUtils.isBlank(appid)) {
 			return false;
 		}
-		String name = appid + "_1";
-		boolean created = createIndexWithoutAlias(name, shards, replicas);
+		String indexName = appid.trim() + "_1";
+		boolean created = createIndexWithoutAlias(indexName, shards, replicas);
 		if (created) {
-			boolean aliased = addIndexAlias(name, appid);
+			boolean aliased = addIndexAlias(indexName, appid);
 			if (!aliased) {
-				logger.warn("Created ES index '{}' without an alias '{}'.", name, appid);
+				logger.warn("Created ES index '{}' without an alias '{}'.", indexName, appid);
 			} else {
-				logger.warn("Created ES index '{}' with alias '{}'.", name, appid);
+				logger.warn("Created ES index '{}' with alias '{}'.", indexName, appid);
 			}
 		}
 		return created;
@@ -235,8 +234,9 @@ public final class ElasticSearchUtils {
 			return false;
 		}
 		try {
-			logger.info("Deleted ES index '{}'.", appid);
-			getClient().admin().indices().prepareDelete(appid).execute().actionGet();
+			String indexName = appid.trim();
+			logger.info("Deleted ES index '{}'.", indexName);
+			getClient().admin().indices().prepareDelete(indexName).execute().actionGet();
 		} catch (Exception e) {
 			logger.warn(null, e);
 			return false;
@@ -253,9 +253,11 @@ public final class ElasticSearchUtils {
 		if (StringUtils.isBlank(appid)) {
 			return false;
 		}
+		// don't assume false, might be distructive!
 		boolean exists = true;
 		try {
-			exists = getClient().admin().indices().prepareExists(appid).execute().
+			String indexName = appid.trim();
+			exists = getClient().admin().indices().prepareExists(indexName).execute().
 					actionGet().isExists();
 		} catch (Exception e) {
 			logger.warn(null, e);
@@ -278,22 +280,20 @@ public final class ElasticSearchUtils {
 			return false;
 		}
 		try {
-			if (!existsIndex(appid)) {
-				logger.warn("Can't rebuild '{}' - index doesn't exist.", appid);
+			String indexName = appid.trim();
+			if (!isShared && !existsIndex(indexName)) {
+				logger.warn("Can't rebuild '{}' - index doesn't exist.", indexName);
 				return false;
 			}
-			String oldName = getIndexNameForAlias(appid);
-			String newName = appid;
+			String oldName = getIndexNameForAlias(indexName);
+			String newName = indexName;
 
-			if (oldName == null) {
-				return false;
-			}
 			if (!isShared) {
 				newName = oldName.substring(0, oldName.indexOf('_')) + "_" + Utils.timestamp();
 				createIndexWithoutAlias(newName, -1, -1);
 			}
 
-			logger.info("rebuildIndex(): {}", appid);
+			logger.info("rebuildIndex(): {}", indexName);
 
 			BulkRequestBuilder brb = getClient().prepareBulk();
 			BulkResponse resp;
@@ -304,8 +304,8 @@ public final class ElasticSearchUtils {
 
 			List<ParaObject> list;
 			do {
-				list = dao.readPage(appid, p);
-				logger.debug("rebuildIndex(): Read {} objects from table {}.", list.size(), appid);
+				list = dao.readPage(appid, p); // use appid!
+				logger.debug("rebuildIndex(): Read {} objects from table {}.", list.size(), indexName);
 				for (ParaObject obj : list) {
 					if (obj != null) {
 						// put objects from DB into the newly created index
@@ -333,7 +333,7 @@ public final class ElasticSearchUtils {
 
 			if (!isShared) {
 				// switch to alias NEW_INDEX -> ALIAS, OLD_INDEX -> DELETE old index
-				switchIndexToAlias(oldName, newName, appid, true);
+				switchIndexToAlias(oldName, newName, indexName, true);
 			}
 			logger.info("rebuildIndex(): Done. {} objects reindexed.", count);
 		} catch (Exception e) {
@@ -352,7 +352,6 @@ public final class ElasticSearchUtils {
 	 * @return a map of key value pairs containing cluster information
 	 */
 	public static Map<String, NodeInfo> getSearchClusterInfo() {
-		Map<String, String> md = new HashMap<String, String>();
 		NodesInfoResponse res = getClient().admin().cluster().nodesInfo(new NodesInfoRequest().all()).actionGet();
 		return res.getNodesMap();
 	}
@@ -360,16 +359,18 @@ public final class ElasticSearchUtils {
 	/**
 	 * Adds a new alias to an existing index.
 	 * @param indexName the index name
-	 * @param alias the alias
+	 * @param aliasName the alias
 	 * @return true if acknowledged
 	 */
-	public static boolean addIndexAlias(String indexName, String alias) {
-		if (!existsIndex(indexName)) {
+	public static boolean addIndexAlias(String indexName, String aliasName) {
+		if (StringUtils.isBlank(aliasName) || !existsIndex(indexName)) {
 			return false;
 		}
 		try {
+			String alias = aliasName.trim();
+			String index = indexName.trim();
 			return getClient().admin().indices().prepareAliases().addAliasAction(AliasActions.add().
-					index(indexName).alias(alias).searchRouting(alias).indexRouting(alias).
+					index(index).alias(alias).searchRouting(alias).indexRouting(alias).
 					filter(QueryBuilders.termQuery(Config._APPID, alias))).
 					execute().actionGet().isAcknowledged();
 		} catch (Exception e) {
@@ -381,25 +382,32 @@ public final class ElasticSearchUtils {
 	/**
 	 * Removes an alias from an index.
 	 * @param indexName the index name
-	 * @param alias the alias
+	 * @param aliasName the alias
 	 * @return true if acknowledged
 	 */
-	public static boolean removeIndexAlias(String indexName, String alias) {
-		if (!existsIndex(indexName)) {
+	public static boolean removeIndexAlias(String indexName, String aliasName) {
+		if (StringUtils.isBlank(aliasName) || !existsIndex(indexName)) {
 			return false;
 		}
-		return getClient().admin().indices().prepareAliases().removeAlias(indexName, alias).
+		String alias = aliasName.trim();
+		String index = indexName.trim();
+		return getClient().admin().indices().prepareAliases().removeAlias(index, alias).
 				execute().actionGet().isAcknowledged();
 	}
 
 	/**
 	 * Checks if an index has a registered alias.
 	 * @param indexName the index name
-	 * @param alias the alias
+	 * @param aliasName the alias
 	 * @return true if alias is set on index
 	 */
-	public static boolean existsIndexAlias(String indexName, String alias) {
-		return getClient().admin().indices().prepareAliasesExist(indexName).addAliases(alias).
+	public static boolean existsIndexAlias(String indexName, String aliasName) {
+		if (StringUtils.isBlank(indexName) || StringUtils.isBlank(aliasName)) {
+			return false;
+		}
+		String alias = aliasName.trim();
+		String index = indexName.trim();
+		return getClient().admin().indices().prepareAliasesExist(index).addAliases(alias).
 				execute().actionGet().exists();
 	}
 
@@ -411,11 +419,17 @@ public final class ElasticSearchUtils {
 	 * @param deleteOld if true will delete the old index completely
 	 */
 	public static void switchIndexToAlias(String oldIndex, String newIndex, String alias, boolean deleteOld) {
-		logger.info("Switching index aliases {}->{}, deleting index '{}': {}", alias, newIndex, oldIndex, deleteOld);
+		if (StringUtils.isBlank(oldIndex) || StringUtils.isBlank(newIndex) || StringUtils.isBlank(alias)) {
+			return;
+		}
 		try {
+			String aliaz = alias.trim();
+			String oldName = oldIndex.trim();
+			String newName = newIndex.trim();
+			logger.info("Switching index aliases {}->{}, deleting '{}': {}", aliaz, newIndex, oldIndex, deleteOld);
 			getClient().admin().indices().prepareAliases().
-					addAlias(newIndex, alias).
-					removeAlias(oldIndex, alias).
+					addAlias(newName, aliaz).
+					removeAlias(oldName, aliaz).
 					execute().actionGet();
 			// delete the old index
 			if (deleteOld) {
@@ -433,17 +447,19 @@ public final class ElasticSearchUtils {
 	 */
 	public static String getIndexNameForAlias(String appid) {
 		if (StringUtils.isBlank(appid)) {
-			return null;
+			return "";
 		}
+		String indexName = appid.trim();
 		GetAliasesResponse get = getClient().admin().indices().
-				prepareGetAliases(appid).execute().actionGet();
+				prepareGetAliases(indexName).execute().actionGet();
 		ImmutableOpenMap<String, List<AliasMetaData>> aliases = get.getAliases();
-		if (aliases.size() > 1) {
-			logger.warn("More than one index for alias {}", appid);
-		} else if (!aliases.isEmpty()) {
+		if (!aliases.isEmpty()) {
+			if (aliases.size() > 1) {
+				logger.warn("More than one index for alias {}", indexName);
+			}
 			return aliases.keysIt().next();
 		}
-		return null;
+		return "";
 	}
 
 	/**
@@ -547,7 +563,7 @@ public final class ElasticSearchUtils {
 	 * @return the correct index name
 	 */
 	protected static String getIndexName(String appid) {
-		return appid;
+		return appid.trim();
 	}
 
 }
