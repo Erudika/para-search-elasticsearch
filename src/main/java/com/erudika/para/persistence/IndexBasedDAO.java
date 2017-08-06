@@ -42,9 +42,12 @@ import org.slf4j.LoggerFactory;
  * Objects are stored in the index rather than in a data store.
  *
  * <b>Note</b>: This implementation doesn't work well with apps sharing one index (app.isSharingIndex() must be false).
+ * This was only ever useful for embedded Elasticsearch instances, before version 5.x.
  * @author Alex Bogdanovski [alex@erudika.com]
+ * @deprecated use a real DAO like, MongoDBDAO or AWSDynamoDAO or H2DAO
  */
 @Singleton
+@Deprecated
 public class IndexBasedDAO implements DAO {
 
 	private static final Logger logger = LoggerFactory.getLogger(IndexBasedDAO.class);

@@ -22,11 +22,13 @@ import com.erudika.para.search.ElasticSearchUtils;
 import com.erudika.para.search.Search;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 
 /**
- *
+ * DEPRECATED! 
  * @author Alex Bogdanovski [alex@erudika.com]
  */
+@Ignore
 public class IndexBasedDAOIT extends DAOTest {
 
 	private static final String ROOT_APP_NAME = "para-test-dao";
