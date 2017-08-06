@@ -78,20 +78,20 @@ public final class ElasticSearchUtils {
 			"      \"updated\": {\"type\": \"date\", \"format\" : \"" + DATE_FORMAT + "\"},\n" +
 			"      \"timestamp\": {\"type\": \"date\", \"format\" : \"" + DATE_FORMAT + "\"},\n" +
 
-			"      \"tag\": {\"type\": \"string\", \"index\": \"not_analyzed\"},\n" +
-			"      \"id\": {\"type\": \"string\", \"index\": \"not_analyzed\"},\n" +
-			"      \"key\": {\"type\": \"string\", \"index\": \"not_analyzed\"},\n" +
-			"      \"name\": {\"type\": \"string\", \"index\": \"not_analyzed\"},\n" +
-			"      \"type\": {\"type\": \"string\", \"index\": \"not_analyzed\"},\n" +
-			"      \"tags\": {\"type\": \"string\", \"index\": \"not_analyzed\"},\n" +
-			"      \"token\": {\"type\": \"string\", \"index\": \"not_analyzed\"},\n" +
-			"      \"email\": {\"type\": \"string\", \"index\": \"not_analyzed\"},\n" +
-			"      \"appid\": {\"type\": \"string\", \"index\": \"not_analyzed\"},\n" +
-			"      \"groups\": {\"type\": \"string\", \"index\": \"not_analyzed\"},\n" +
-			"      \"password\": {\"type\": \"string\", \"index\": \"not_analyzed\"},\n" +
-			"      \"parentid\": {\"type\": \"string\", \"index\": \"not_analyzed\"},\n" +
-			"      \"creatorid\": {\"type\": \"string\", \"index\": \"not_analyzed\"},\n" +
-			"      \"identifier\": {\"type\": \"string\", \"index\": \"not_analyzed\"}\n" +
+			"      \"tag\": {\"type\": \"keyword\", \"index\": \"not_analyzed\"},\n" +
+			"      \"id\": {\"type\": \"keyword\", \"index\": \"not_analyzed\"},\n" +
+			"      \"key\": {\"type\": \"keyword\", \"index\": \"not_analyzed\"},\n" +
+			"      \"name\": {\"type\": \"keyword\", \"index\": \"not_analyzed\"},\n" +
+			"      \"type\": {\"type\": \"keyword\", \"index\": \"not_analyzed\"},\n" +
+			"      \"tags\": {\"type\": \"keyword\", \"index\": \"not_analyzed\"},\n" +
+			"      \"token\": {\"type\": \"keyword\", \"index\": \"not_analyzed\"},\n" +
+			"      \"email\": {\"type\": \"keyword\", \"index\": \"not_analyzed\"},\n" +
+			"      \"appid\": {\"type\": \"keyword\", \"index\": \"not_analyzed\"},\n" +
+			"      \"groups\": {\"type\": \"keyword\", \"index\": \"not_analyzed\"},\n" +
+			"      \"password\": {\"type\": \"keyword\", \"index\": \"not_analyzed\"},\n" +
+			"      \"parentid\": {\"type\": \"keyword\", \"index\": \"not_analyzed\"},\n" +
+			"      \"creatorid\": {\"type\": \"keyword\", \"index\": \"not_analyzed\"},\n" +
+			"      \"identifier\": {\"type\": \"keyword\", \"index\": \"not_analyzed\"}\n" +
 			"    }\n" +
 			"  }\n" +
 			"}";
@@ -216,9 +216,9 @@ public final class ElasticSearchUtils {
 		if (created) {
 			boolean aliased = addIndexAlias(indexName, appid);
 			if (!aliased) {
-				logger.warn("Created ES index '{}' without an alias '{}'.", indexName, appid);
+				logger.info("Created ES index '{}' without an alias '{}'.", indexName, appid);
 			} else {
-				logger.warn("Created ES index '{}' with alias '{}'.", indexName, appid);
+				logger.info("Created ES index '{}' with alias '{}'.", indexName, appid);
 			}
 		}
 		return created;
@@ -282,8 +282,8 @@ public final class ElasticSearchUtils {
 		try {
 			String indexName = appid.trim();
 			if (!isShared && !existsIndex(indexName)) {
-				logger.warn("Can't rebuild '{}' - index doesn't exist.", indexName);
-				return false;
+				logger.info("Creating '{}' index because it doesn't exist.", indexName);
+				createIndex(indexName);
 			}
 			String oldName = getIndexNameForAlias(indexName);
 			String newName = indexName;
@@ -371,7 +371,7 @@ public final class ElasticSearchUtils {
 			String index = indexName.trim();
 			return getClient().admin().indices().prepareAliases().addAliasAction(AliasActions.add().
 					index(index).alias(alias).searchRouting(alias).indexRouting(alias).
-					filter(QueryBuilders.termQuery(Config._APPID, alias))).
+					filter(QueryBuilders.termQuery(Config._APPID, aliasName))).// DO NOT trim filter query!
 					execute().actionGet().isAcknowledged();
 		} catch (Exception e) {
 			logger.error(null, e);

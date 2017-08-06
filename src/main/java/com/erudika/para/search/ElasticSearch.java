@@ -83,7 +83,6 @@ public class ElasticSearch implements Search {
 	 * No-args constructor.
 	 */
 	public ElasticSearch() {
-		this(CoreUtils.getInstance().getDao());
 		if (Config.isSearchEnabled()) {
 			ElasticSearchUtils.getClient();
 		}
@@ -122,6 +121,13 @@ public class ElasticSearch implements Search {
 	@Inject
 	public ElasticSearch(DAO dao) {
 		this.dao = dao;
+	}
+
+	private DAO getDAO() {
+		if (dao == null) {
+			return CoreUtils.getInstance().getDao();
+		}
+		return dao;
 	}
 
 	Client client() {
@@ -454,7 +460,7 @@ public class ElasticSearch implements Search {
 
 			if (!readFromIndex && !keys.isEmpty()) {
 				ArrayList<String> nullz = new ArrayList<String>(results.size());
-				Map<String, P> fromDB = dao.readAll(appid, keys, true);
+				Map<String, P> fromDB = getDAO().readAll(appid, keys, true);
 				for (int i = 0; i < keys.size(); i++) {
 					String key = keys.get(i);
 					P pobj = fromDB.get(key);

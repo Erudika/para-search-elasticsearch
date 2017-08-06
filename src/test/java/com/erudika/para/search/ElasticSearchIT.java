@@ -20,9 +20,9 @@ package com.erudika.para.search;
 import com.erudika.para.core.App;
 import com.erudika.para.core.ParaObject;
 import com.erudika.para.core.Tag;
-import com.erudika.para.persistence.DAO;
 import static com.erudika.para.search.SearchTest.u;
 import com.erudika.para.utils.Config;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,7 +30,6 @@ import org.junit.AfterClass;
 import static org.junit.Assert.*;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import static org.mockito.Mockito.mock;
 
 /**
  *
@@ -44,7 +43,7 @@ public class ElasticSearchIT extends SearchTest {
 		System.setProperty("para.app_name", "para-test");
 		System.setProperty("para.cluster_name", "test");
 		System.setProperty("para.es.shards", "2");
-		s = new ElasticSearch(mock(DAO.class));
+		s = new ElasticSearch();
 		ElasticSearchUtils.createIndex(Config.getRootAppIdentifier());
 		ElasticSearchUtils.createIndex(appid1);
 		ElasticSearchUtils.createIndex(appid2);
@@ -122,7 +121,7 @@ public class ElasticSearchIT extends SearchTest {
 	@Test
 	public void testSharedIndex() throws InterruptedException {
 		String app1 = "myapp1";
-		String app2 = "myapp2";
+		String app2 = " myapp2"; // IMPORTANT! See "para.prepend_shared_appids_with_space"
 		String root = "root-index";
 
 		App rootApp = new App("rootapp");
@@ -160,5 +159,9 @@ public class ElasticSearchIT extends SearchTest {
 		assertEquals(2, l1.size());
 		List<Tag> l2 = s.findQuery(app2, "tag", "*");
 		assertEquals(l2.get(0), t2);
+
+		s.unindexAll(Arrays.asList(t1, t2, t3));
+		ElasticSearchUtils.removeIndexAlias(root, app1);
+		ElasticSearchUtils.removeIndexAlias(root, app2);
 	}
 }

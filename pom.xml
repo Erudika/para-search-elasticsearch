@@ -55,7 +55,7 @@
 		<skipTests>false</skipTests>
 		<skipITs>${skipTests}</skipITs>
 		<skipUTs>${skipTests}</skipUTs>
-		<elasticsearch.version>5.5.0</elasticsearch.version>
+		<elasticsearch.version>5.5.1</elasticsearch.version>
 	</properties>
 
 	<dependencies>
@@ -97,7 +97,7 @@
 				<configuration>
 					<skip>${skipITs}</skip>
 					<autoCreateIndex>false</autoCreateIndex>
-					<version>5.5.0</version>
+					<version>${elasticsearch.version}</version>
 					<clusterName>test</clusterName>
 					<tcpPort>9300</tcpPort>
 					<httpPort>9200</httpPort>
