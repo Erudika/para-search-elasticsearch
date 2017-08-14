@@ -78,20 +78,20 @@ public final class ElasticSearchUtils {
 			"      \"updated\": {\"type\": \"date\", \"format\" : \"" + DATE_FORMAT + "\"},\n" +
 			"      \"timestamp\": {\"type\": \"date\", \"format\" : \"" + DATE_FORMAT + "\"},\n" +
 
-			"      \"tag\": {\"type\": \"keyword\", \"index\": \"not_analyzed\"},\n" +
-			"      \"id\": {\"type\": \"keyword\", \"index\": \"not_analyzed\"},\n" +
-			"      \"key\": {\"type\": \"keyword\", \"index\": \"not_analyzed\"},\n" +
-			"      \"name\": {\"type\": \"keyword\", \"index\": \"not_analyzed\"},\n" +
-			"      \"type\": {\"type\": \"keyword\", \"index\": \"not_analyzed\"},\n" +
-			"      \"tags\": {\"type\": \"keyword\", \"index\": \"not_analyzed\"},\n" +
-			"      \"token\": {\"type\": \"keyword\", \"index\": \"not_analyzed\"},\n" +
-			"      \"email\": {\"type\": \"keyword\", \"index\": \"not_analyzed\"},\n" +
-			"      \"appid\": {\"type\": \"keyword\", \"index\": \"not_analyzed\"},\n" +
-			"      \"groups\": {\"type\": \"keyword\", \"index\": \"not_analyzed\"},\n" +
-			"      \"password\": {\"type\": \"keyword\", \"index\": \"not_analyzed\"},\n" +
-			"      \"parentid\": {\"type\": \"keyword\", \"index\": \"not_analyzed\"},\n" +
-			"      \"creatorid\": {\"type\": \"keyword\", \"index\": \"not_analyzed\"},\n" +
-			"      \"identifier\": {\"type\": \"keyword\", \"index\": \"not_analyzed\"}\n" +
+			"      \"tag\": {\"type\": \"keyword\"},\n" +
+			"      \"id\": {\"type\": \"keyword\"},\n" +
+			"      \"key\": {\"type\": \"keyword\"},\n" +
+			"      \"name\": {\"type\": \"keyword\"},\n" +
+			"      \"type\": {\"type\": \"keyword\"},\n" +
+			"      \"tags\": {\"type\": \"keyword\"},\n" +
+			"      \"token\": {\"type\": \"keyword\"},\n" +
+			"      \"email\": {\"type\": \"keyword\"},\n" +
+			"      \"appid\": {\"type\": \"keyword\"},\n" +
+			"      \"groups\": {\"type\": \"keyword\"},\n" +
+			"      \"password\": {\"type\": \"keyword\"},\n" +
+			"      \"parentid\": {\"type\": \"keyword\"},\n" +
+			"      \"creatorid\": {\"type\": \"keyword\"},\n" +
+			"      \"identifier\": {\"type\": \"keyword\"}\n" +
 			"    }\n" +
 			"  }\n" +
 			"}";
