@@ -533,8 +533,8 @@ public final class ElasticSearchUtils {
 	 * @return the query if valid, or '*' if invalid
 	 */
 	static String qs(String query) {
-		if (query == null) {
-			query = "*";
+		if (StringUtils.isBlank(query) || "*".equals(query.trim())) {
+			return "*";
 		}
 		query = query.trim();
 		if (query.length() > 1 && query.startsWith("*")) {
