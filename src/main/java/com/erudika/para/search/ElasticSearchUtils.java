@@ -540,17 +540,11 @@ public final class ElasticSearchUtils {
 		if (query.length() > 1 && query.startsWith("*")) {
 			query = query.substring(1);
 		}
-		if (query.length() > 1 && query.contains(" *")) {
-			query = query.replaceAll("\\s\\*", " ").trim();
-		}
-		if (query.length() >= 2 && query.toLowerCase().endsWith("and") ||
-				query.toLowerCase().endsWith("or") || query.toLowerCase().endsWith("not")) {
-			query = query.substring(0, query.length() - (query.toLowerCase().endsWith("or") ? 2 : 3));
-		}
 		try {
 			QUERY_PARSER.setAllowLeadingWildcard(false);
 			QUERY_PARSER.parse(query, "");
 		} catch (Exception ex) {
+			logger.warn("Failed to parse query string '{}'.", query);
 			query = "*";
 		}
 		return query.trim();
