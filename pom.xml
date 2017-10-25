@@ -62,7 +62,7 @@
 		<dependency>
 			<groupId>com.erudika</groupId>
 			<artifactId>para-core</artifactId>
-			<version>1.25.3</version>
+			<version>1.25.4</version>
 			<scope>provided</scope>
 		</dependency>
 
