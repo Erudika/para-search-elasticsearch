@@ -62,7 +62,6 @@ import org.slf4j.LoggerFactory;
 public final class ElasticSearchUtils {
 
 	private static final Logger logger = LoggerFactory.getLogger(ElasticSearchUtils.class);
-	private static final StandardQueryParser QUERY_PARSER = new StandardQueryParser();
 	private static TransportClient searchClient;
 	private static final String DATE_FORMAT = "epoch_millis||epoch_second||yyyy-MM-dd HH:mm:ss||"
 			+ "yyyy-MM-dd||yyyy/MM/dd||yyyyMMdd||yyyy";
@@ -541,8 +540,9 @@ public final class ElasticSearchUtils {
 			query = query.substring(1);
 		}
 		try {
-			QUERY_PARSER.setAllowLeadingWildcard(false);
-			QUERY_PARSER.parse(query, "");
+			StandardQueryParser parser = new StandardQueryParser();
+			parser.setAllowLeadingWildcard(false);
+			parser.parse(query, "");
 		} catch (Exception ex) {
 			logger.warn("Failed to parse query string '{}'.", query);
 			query = "*";
