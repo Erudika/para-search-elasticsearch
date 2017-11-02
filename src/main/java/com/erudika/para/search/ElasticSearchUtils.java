@@ -25,6 +25,8 @@ import com.erudika.para.utils.Pager;
 import com.erudika.para.utils.Utils;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -74,6 +76,7 @@ public final class ElasticSearchUtils {
 			"    \"properties\": {\n" +
 			"      \"nstd\": {\"type\": \"nested\"},\n" +
 			"      \"latlng\": {\"type\": \"geo_point\"},\n" +
+			"      \"_docid\": {\"type\": \"long\", \"index\": false},\n" +
 			"      \"updated\": {\"type\": \"date\", \"format\" : \"" + DATE_FORMAT + "\"},\n" +
 			"      \"timestamp\": {\"type\": \"date\", \"format\" : \"" + DATE_FORMAT + "\"},\n" +
 
@@ -548,6 +551,39 @@ public final class ElasticSearchUtils {
 			query = "*";
 		}
 		return query.trim();
+	}
+
+	/**
+	 * Converts a {@link ParaObject} to a map of fields and values.
+	 * @param po an object
+	 * @return a map of keys and values
+	 */
+	static Map<String, Object> getSourceFromParaObject(ParaObject po) {
+		if (po == null) {
+			return Collections.emptyMap();
+		}
+		Map<String, Object> data = ParaObjectUtils.getAnnotatedFields(po, null, false);
+		Map<String, Object> source = new HashMap<>(data.size() + 1);
+		source.putAll(data);
+		// special DOC ID field used in "search after"
+		source.put("_docid", Utils.getNewId());
+		return source;
+	}
+
+	/**
+	 * Converts the source of an ES document to {@link ParaObject}.
+	 * @param <P> object type
+	 * @param source a map of keys and values coming from ES
+	 * @return a new ParaObject
+	 */
+	static <P extends ParaObject> P getParaObjectFromSource(Map<String, Object> source) {
+		if (source == null) {
+			return null;
+		}
+		Map<String, Object> data = new HashMap<>(source.size());
+		data.putAll(source);
+		data.remove("_docid");
+		return ParaObjectUtils.setAnnotatedFields(data);
 	}
 
 	/**

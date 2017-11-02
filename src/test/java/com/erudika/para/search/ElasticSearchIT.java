@@ -47,6 +47,7 @@ public class ElasticSearchIT extends SearchTest {
 		ElasticSearchUtils.createIndex(Config.getRootAppIdentifier());
 		ElasticSearchUtils.createIndex(appid1);
 		ElasticSearchUtils.createIndex(appid2);
+		ElasticSearchUtils.createIndex(appid3);
 		ElasticSearchUtils.createIndex("root-index");
 		SearchTest.init();
 	}
@@ -56,6 +57,7 @@ public class ElasticSearchIT extends SearchTest {
 		ElasticSearchUtils.deleteIndex(Config.getRootAppIdentifier());
 		ElasticSearchUtils.deleteIndex(appid1);
 		ElasticSearchUtils.deleteIndex(appid2);
+		ElasticSearchUtils.deleteIndex(appid3);
 		ElasticSearchUtils.deleteIndex("root-index");
 		ElasticSearchUtils.shutdownClient();
 		SearchTest.cleanup();
@@ -63,21 +65,21 @@ public class ElasticSearchIT extends SearchTest {
 
 	@Test
 	public void testCreateDeleteExistsIndex() {
-		String appid3 = "test-index";
+		String appid = "test-index";
 		String badAppid = "test index 123";
 
 		ElasticSearchUtils.createIndex("");
 		assertFalse(ElasticSearchUtils.existsIndex(""));
 
-		ElasticSearchUtils.createIndex(appid3);
-		assertTrue(ElasticSearchUtils.existsIndex(appid3));
+		ElasticSearchUtils.createIndex(appid);
+		assertTrue(ElasticSearchUtils.existsIndex(appid));
 
-		ElasticSearchUtils.deleteIndex(appid3);
-		assertFalse(ElasticSearchUtils.existsIndex(appid3));
+		ElasticSearchUtils.deleteIndex(appid);
+		assertFalse(ElasticSearchUtils.existsIndex(appid));
 
 		assertFalse(ElasticSearchUtils.createIndex(badAppid));
 		assertFalse(ElasticSearchUtils.existsIndex(badAppid));
-		assertFalse(ElasticSearchUtils.deleteIndex(appid3));
+		assertFalse(ElasticSearchUtils.deleteIndex(appid));
 		assertFalse(ElasticSearchUtils.deleteIndex(badAppid));
 	}
 

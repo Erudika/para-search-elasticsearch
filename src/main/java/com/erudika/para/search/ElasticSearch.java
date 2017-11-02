@@ -22,11 +22,11 @@ import com.erudika.para.AppDeletedListener;
 import com.erudika.para.core.Address;
 import com.erudika.para.core.App;
 import com.erudika.para.core.ParaObject;
-import com.erudika.para.core.utils.ParaObjectUtils;
 import com.erudika.para.core.Tag;
 import com.erudika.para.core.utils.CoreUtils;
 import com.erudika.para.persistence.DAO;
 import static com.erudika.para.search.ElasticSearchUtils.getIndexName;
+import static com.erudika.para.search.ElasticSearchUtils.getPager;
 import static com.erudika.para.search.ElasticSearchUtils.getTermsQuery;
 import static com.erudika.para.search.ElasticSearchUtils.isAsyncEnabled;
 import static com.erudika.para.search.ElasticSearchUtils.qs;
@@ -42,6 +42,7 @@ import java.util.Map;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.math.NumberUtils;
 import static org.apache.lucene.search.join.ScoreMode.Avg;
 import org.elasticsearch.action.bulk.BulkRequestBuilder;
 import org.elasticsearch.action.bulk.BulkResponse;
@@ -139,10 +140,9 @@ public class ElasticSearch implements Search {
 		if (po == null || StringUtils.isBlank(appid)) {
 			return;
 		}
-		Map<String, Object> data = ParaObjectUtils.getAnnotatedFields(po, null, false);
 		try {
 			IndexRequestBuilder irb = client().prepareIndex(getIndexName(appid), po.getType(), po.getId()).
-					setSource(data);
+					setSource(ElasticSearchUtils.getSourceFromParaObject(po));
 			if (isAsyncEnabled()) {
 				irb.execute();
 			} else {
@@ -180,7 +180,7 @@ public class ElasticSearch implements Search {
 		BulkRequestBuilder brb = client().prepareBulk();
 		for (ParaObject po : objects) {
 			brb.add(client().prepareIndex(getIndexName(appid), po.getType(), po.getId()).
-					setSource(ParaObjectUtils.getAnnotatedFields(po, null, false)));
+					setSource(ElasticSearchUtils.getSourceFromParaObject(po)));
 		}
 		if (brb.numberOfActions() > 0) {
 			if (isAsyncEnabled()) {
@@ -252,7 +252,7 @@ public class ElasticSearch implements Search {
 	@Override
 	public <P extends ParaObject> P findById(String appid, String id) {
 		try {
-			return ParaObjectUtils.setAnnotatedFields(getSource(appid, id, null));
+			return ElasticSearchUtils.getParaObjectFromSource(getSource(appid, id, null));
 		} catch (Exception e) {
 			logger.warn(null, e);
 			return null;
@@ -398,11 +398,13 @@ public class ElasticSearch implements Search {
 		if (StringUtils.isBlank(query)) {
 			query = "*";
 		}
+		Pager page = getPager(pager);
 		// find nearby Address objects
 		QueryBuilder qb1 = QueryBuilders.geoDistanceQuery("latlng").point(lat, lng).
 				distance(radius, DistanceUnit.KILOMETERS);
 
-		SearchHits hits1 = searchQueryRaw(appid, Utils.type(Address.class), qb1, pager);
+		SearchHits hits1 = searchQueryRaw(appid, Utils.type(Address.class), qb1, page);
+		page.setLastKey(null); // will cause problems if not cleared
 
 		if (hits1 == null) {
 			return Collections.emptyList();
@@ -423,7 +425,7 @@ public class ElasticSearch implements Search {
 
 		QueryBuilder qb2 = QueryBuilders.boolQuery().must(QueryBuilders.queryStringQuery(qs(query))).
 				filter(QueryBuilders.idsQuery(type).addIds(parentids));
-		SearchHits hits2 = searchQueryRaw(appid, type, qb2, pager);
+		SearchHits hits2 = searchQueryRaw(appid, type, qb2, page);
 
 		return searchQuery(appid, hits2);
 	}
@@ -440,7 +442,7 @@ public class ElasticSearch implements Search {
 	 * @param hits the search results from a query
 	 * @return the list of object found
 	 */
-	private <P extends ParaObject> List<P> searchQuery(final String appid, SearchHits hits) {
+	protected <P extends ParaObject> List<P> searchQuery(final String appid, SearchHits hits) {
 		if (hits == null) {
 			return Collections.emptyList();
 		}
@@ -450,7 +452,7 @@ public class ElasticSearch implements Search {
 		try {
 			for (SearchHit hit : hits) {
 				if (readFromIndex) {
-					P pobj = ParaObjectUtils.setAnnotatedFields(hit.getSource());
+					P pobj = ElasticSearchUtils.getParaObjectFromSource(hit.getSource());
 					results.add(pobj);
 				} else {
 					keys.add(hit.getId());
@@ -465,7 +467,7 @@ public class ElasticSearch implements Search {
 					String key = keys.get(i);
 					P pobj = fromDB.get(key);
 					if (pobj == null) {
-						pobj = ParaObjectUtils.setAnnotatedFields(hits.getAt(i).getSource());
+						pobj = ElasticSearchUtils.getParaObjectFromSource(hits.getAt(i).getSource());
 						// object is still in index but not in DB
 						if (pobj != null && appid.equals(pobj.getAppid()) && pobj.getStored()) {
 							nullz.add(key);
@@ -497,15 +499,12 @@ public class ElasticSearch implements Search {
 	 * @param pager a {@link com.erudika.para.utils.Pager}
 	 * @return a list of search results
 	 */
-	private SearchHits searchQueryRaw(String appid, String type, QueryBuilder query, Pager... pager) {
+	protected SearchHits searchQueryRaw(String appid, String type, QueryBuilder query, Pager... pager) {
 		if (StringUtils.isBlank(appid)) {
 			return null;
 		}
 		Pager page = ElasticSearchUtils.getPager(pager);
 		SortOrder order = page.isDesc() ? SortOrder.DESC : SortOrder.ASC;
-		SortBuilder<?> sort = StringUtils.isBlank(page.getSortby()) ?
-				SortBuilders.scoreSort() : SortBuilders.fieldSort(page.getSortby()).order(order);
-
 		int max = page.getLimit();
 		int pageNum = (int) page.getPage();
 		int start = (pageNum < 1 || pageNum > Config.MAX_PAGES) ? 0 : (pageNum - 1) * max;
@@ -513,16 +512,25 @@ public class ElasticSearch implements Search {
 		if (query == null) {
 			query = QueryBuilders.matchAllQuery();
 		}
-		if (sort == null) {
-			sort = SortBuilders.scoreSort();
-		}
 
 		SearchHits hits = null;
 
 		try {
 			SearchRequestBuilder srb = client().prepareSearch(getIndexName(appid)).
-				setSearchType(SearchType.DFS_QUERY_THEN_FETCH).
-				setQuery(query).addSort(sort).setFrom(start).setSize(max);
+					setSearchType(SearchType.DFS_QUERY_THEN_FETCH).
+					setQuery(query).
+					setSize(max);
+
+			if (pageNum <= 1 && !StringUtils.isBlank(page.getLastKey())) {
+				srb.searchAfter(new Object[]{NumberUtils.toLong(page.getLastKey())});
+				srb.setFrom(0);
+				srb.addSort(SortBuilders.fieldSort("_docid"));
+			} else {
+				SortBuilder<?> sort = StringUtils.isBlank(page.getSortby()) ? SortBuilders.scoreSort()
+						: SortBuilders.fieldSort(page.getSortby()).order(order);
+				srb.setFrom(start);
+				srb.addSort(sort);
+			}
 
 			if (!StringUtils.isBlank(type)) {
 				srb.setTypes(type);
@@ -531,6 +539,12 @@ public class ElasticSearch implements Search {
 
 			hits = srb.execute().actionGet().getHits();
 			page.setCount(hits.getTotalHits());
+			if (hits.getHits().length > 0) {
+				Object id = hits.getAt(hits.getHits().length - 1).getSourceAsMap().get("_docid");
+				if (id != null) {
+					page.setLastKey(id.toString());
+				}
+			}
 		} catch (Exception e) {
 			Throwable cause = e.getCause();
 			String msg = cause != null ? cause.getMessage() : e.getMessage();
