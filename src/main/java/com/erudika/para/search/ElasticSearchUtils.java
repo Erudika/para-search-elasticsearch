@@ -32,6 +32,7 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.math.NumberUtils;
 import org.apache.lucene.queryparser.flexible.standard.StandardQueryParser;
 import org.elasticsearch.action.admin.cluster.node.info.NodeInfo;
 import org.elasticsearch.action.admin.cluster.node.info.NodesInfoRequest;
@@ -312,7 +313,7 @@ public final class ElasticSearchUtils {
 					if (obj != null) {
 						// put objects from DB into the newly created index
 						brb.add(getClient().prepareIndex(newName, obj.getType(), obj.getId()).
-								setSource(ParaObjectUtils.getAnnotatedFields(obj, null, false)).request());
+								setSource(getSourceFromParaObject(obj)).request());
 						// index in batches of ${queueSize} objects
 						if (brb.numberOfActions() >= queueSize) {
 							count += brb.numberOfActions();
@@ -566,7 +567,7 @@ public final class ElasticSearchUtils {
 		Map<String, Object> source = new HashMap<>(data.size() + 1);
 		source.putAll(data);
 		// special DOC ID field used in "search after"
-		source.put("_docid", Utils.getNewId());
+		source.put("_docid", NumberUtils.toLong(Utils.getNewId()));
 		return source;
 	}
 

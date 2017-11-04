@@ -524,7 +524,7 @@ public class ElasticSearch implements Search {
 			if (pageNum <= 1 && !StringUtils.isBlank(page.getLastKey())) {
 				srb.searchAfter(new Object[]{NumberUtils.toLong(page.getLastKey())});
 				srb.setFrom(0);
-				srb.addSort(SortBuilders.fieldSort("_docid"));
+				srb.addSort(SortBuilders.fieldSort("_docid").order(order));
 			} else {
 				SortBuilder<?> sort = StringUtils.isBlank(page.getSortby()) ? SortBuilders.scoreSort()
 						: SortBuilders.fieldSort(page.getSortby()).order(order);
