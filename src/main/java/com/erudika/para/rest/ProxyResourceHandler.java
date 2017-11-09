@@ -21,7 +21,7 @@ import com.erudika.para.core.App;
 import com.erudika.para.core.utils.ParaObjectUtils;
 import com.erudika.para.utils.Config;
 import com.erudika.para.utils.Utils;
-import java.io.IOException;
+import java.util.Collections;
 import java.util.Map;
 import static javax.ws.rs.HttpMethod.DELETE;
 import static javax.ws.rs.HttpMethod.GET;
@@ -30,12 +30,14 @@ import static javax.ws.rs.HttpMethod.POST;
 import static javax.ws.rs.HttpMethod.PUT;
 import javax.ws.rs.container.ContainerRequestContext;
 import javax.ws.rs.core.HttpHeaders;
+import static javax.ws.rs.core.HttpHeaders.CONTENT_LENGTH;
 import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.Response;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.Header;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpHost;
+import org.apache.http.entity.ContentType;
 import org.apache.http.entity.InputStreamEntity;
 import org.apache.http.message.BasicHeader;
 import org.elasticsearch.client.RestClient;
@@ -43,22 +45,25 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Acts as a proxy for Elasticsearch and handles request to the custom resouce path {@code /v1/elasticsearch}.
+ * Acts as a proxy for Elasticsearch and handles request to the custom resouce path {@code /v1/_elasticsearch}.
  * @author Alex Bogdanovski [alex@erudika.com]
  */
 public class ProxyResourceHandler implements CustomResourceHandler {
 
 	private static final Logger logger = LoggerFactory.getLogger(ProxyResourceHandler.class);
-	private static final boolean ENABLED = Config.getConfigBoolean("es.proxy_enabled", false);
 	private final String esScheme = Config.getConfigParam("es.restclient_scheme", Config.IN_PRODUCTION ? "https" : "http");
 	private final String esHost = Config.getConfigParam("es.restclient_host",
 		Config.getConfigParam("es.transportclient_host", "localhost"));
 	private final int esPort = Config.getConfigInt("es.restclient_port", 9200);
 
+	/**
+	 * Resource path. Defaults to '_elasticsearch'.
+	 */
+	public static final String PATH = Config.getConfigParam("es.proxy_path", "_elasticsearch");
 
 	@Override
 	public String getRelativePath() {
-		return "elasticsearch";
+		return PATH;
 	}
 
 	@Override
@@ -87,20 +92,23 @@ public class ProxyResourceHandler implements CustomResourceHandler {
 	}
 
 	Response proxyRequest(String method, ContainerRequestContext ctx) {
-		if (!ENABLED) {
+		if (!Config.getConfigBoolean("es.proxy_enabled", false)) {
 			return Response.status(Response.Status.FORBIDDEN.getStatusCode(), "This feature is disabled.").build();
 		}
 		String appid = getAppidFromAuthHeader(ctx.getHeaders().getFirst(HttpHeaders.AUTHORIZATION));
-		String path = ctx.getUriInfo().getQueryParameters().getFirst("path");
+		String path = getPath(ctx);
+		if (StringUtils.isBlank(appid)) {
+			return Response.status(Response.Status.BAD_REQUEST).build();
+		}
+		if (StringUtils.isBlank(path)) {
+			path = "_search";
+		}
 		try {
-			if (StringUtils.isBlank(path)) {
-				path = "_search";
-			}
 			Header[] headers = getHeaders(ctx.getHeaders());
 			HttpEntity resp;
 			if (ctx.getEntityStream() != null && ctx.getEntityStream().available() > 0) {
-				HttpEntity body = new InputStreamEntity(ctx.getEntityStream());
-				resp = getClient(appid).performRequest(method, path, null, body, headers).getEntity();
+				HttpEntity body = new InputStreamEntity(ctx.getEntityStream(), ContentType.APPLICATION_JSON);
+				resp = getClient(appid).performRequest(method, path, Collections.emptyMap(), body, headers).getEntity();
 			} else {
 				resp = getClient(appid).performRequest(method, path, headers).getEntity();
 			}
@@ -108,8 +116,8 @@ public class ProxyResourceHandler implements CustomResourceHandler {
 				Header type = resp.getContentType();
 				return Response.ok(resp.getContent()).header(type.getName(), type.getValue()).build();
 			}
-		} catch (IOException ex) {
-			logger.warn("Failed to proxy GET {} to Elasticsearch: {}", path, ex.getMessage());
+		} catch (Exception ex) {
+			logger.warn("Failed to proxy '{} {}' to Elasticsearch: {}", method, path, ex.getMessage());
 		}
 		return Response.status(Response.Status.BAD_REQUEST).build();
 	}
@@ -156,12 +164,18 @@ public class ProxyResourceHandler implements CustomResourceHandler {
 			return new Header[0];
 		}
 		int i = 0;
+		headers.remove(CONTENT_LENGTH);
 		Header[] headerz = new Header[headers.size()];
 		for (String key : headers.keySet()) {
 			headerz[i] = new BasicHeader(key, headers.getFirst(key));
 			i++;
 		}
 		return headerz;
+	}
+
+	private String getPath(ContainerRequestContext ctx) {
+		String path = ctx.getUriInfo().getPathParameters(true).getFirst("path");
+		return StringUtils.isBlank(path) ? ctx.getUriInfo().getQueryParameters().getFirst("path") : path;
 	}
 
 }

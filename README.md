@@ -15,6 +15,13 @@ and it also automatically indexes those objects and makes them searchable.
 
 This plugin allows you to use Elasticsearch as the search engine for Para.
 
+## Features
+
+- Implements `Search` interface using `TransportClient`
+- Implements `DAO` interface so you can use Elasticsearch as a database (avoid in production!)
+- Full pagination support for both "search-after" and "from-size" modes
+- Proxy endpoint `/v1/_elasticsearch` - relays all requests directly to Elasticsearch (disabled by default)
+
 ## Documentation
 
 ### [Read the Docs](https://paraio.org/docs)
@@ -51,6 +58,12 @@ para.es.auto_expand_replicas = "0-1"
 para.es.use_transportclient = false
 para.es.transportclient_host = "localhost"
 para.es.transportclient_port = 9300
+# proxy settings
+para.es.proxy_enabled = false
+para.es.proxy_path = "_elasticsearch"
+para.es.restclient_scheme = "http"
+para.es.restclient_host = "localhost"
+para.es.restclient_port = 9200
 ```
 
 Finally, set the config property:
@@ -59,6 +72,32 @@ para.search = "ElasticSearch"
 ```
 This could be a Java system property or part of a `application.conf` file on the classpath.
 This tells Para to use the Elasticsearch implementation instead of the default (Lucene).
+
+### Calling Elasticsearch through the proxy endpoint
+
+You can directly call the Elasticsearch API through `/v1/_elasticsearch`. To enable it set `para.es.proxy_enabled = true` first.
+Then you must specify the `path` parameter corresponds to the Elasticsearch API resource path. This is done for every
+`GET`, `PUT`, `POST`, `PATCH` or `DELETE` request to Elasticsearch:
+
+```
+GET /v1/_elasticsearch?path=_search
+DELETE /v1/_elasticsearch/tweet%2f1
+```
+`ParaClient` example:
+
+```java
+Response res = paraClient.invokePost("_elasticsearch/_count",
+				Entity.json(Collections.singletonMap("query",
+										Collections.singletonMap("term",
+										Collections.singletonMap("type", "cat")))));
+```
+If the `path` parameter is omitted, it defaults to `_search`.
+The endpoint accepts request to either `/v1/_elasticsearch` or /v1/_elasticsearch/{path}` where `path` is a URL-encoded
+path parameter, which can also be supplied as query string (e.g. `/v1/_elasticsearch?path=...`)
+
+**Note:** This endpoint requires authentication and unsigned requests are not allowed. Keep in mind that all requests
+to Elasticsearch are prefixed with the app identifier. For example if the app id is "app:myapp, then Para will proxy
+requests to Elasticsearch at `http://eshost:9200/myapp/{path}`.
 
 ### Requirements
 

@@ -56,6 +56,7 @@
 		<skipITs>${skipTests}</skipITs>
 		<skipUTs>${skipTests}</skipUTs>
 		<elasticsearch.version>5.6.3</elasticsearch.version>
+		<jerseyVer>2.26</jerseyVer>
 	</properties>
 
 	<dependencies>
@@ -90,6 +91,18 @@
 			<groupId>junit</groupId>
 			<artifactId>junit</artifactId>
 			<version>4.12</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.glassfish.jersey.test-framework.providers</groupId>
+			<artifactId>jersey-test-framework-provider-inmemory</artifactId>
+			<version>${jerseyVer}</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.glassfish.jersey.inject</groupId>
+			<artifactId>jersey-hk2</artifactId>
+			<version>${jerseyVer}</version>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
