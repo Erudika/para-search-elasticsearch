@@ -43,7 +43,7 @@ WAR file `para-x.y.z.war`. Para will look for plugins inside `lib` and pick up t
 ### Configuration
 
 Here are all the configuration properties for this plugin (these go inside your `application.conf`):
-```
+```ini
 # enable this to bypass the DB and read all data straight from ES
 para.read_from_index = false
 para.es.async_enabled = false
