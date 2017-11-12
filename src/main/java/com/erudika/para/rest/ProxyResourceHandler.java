@@ -106,15 +106,18 @@ public class ProxyResourceHandler implements CustomResourceHandler {
 		try {
 			Header[] headers = getHeaders(ctx.getHeaders());
 			HttpEntity resp;
-			if (ctx.getEntityStream() != null && ctx.getEntityStream().available() > 0) {
-				HttpEntity body = new InputStreamEntity(ctx.getEntityStream(), ContentType.APPLICATION_JSON);
-				resp = getClient(appid).performRequest(method, path, Collections.emptyMap(), body, headers).getEntity();
-			} else {
-				resp = getClient(appid).performRequest(method, path, headers).getEntity();
-			}
-			if (resp != null && resp.getContent() != null) {
-				Header type = resp.getContentType();
-				return Response.ok(resp.getContent()).header(type.getName(), type.getValue()).build();
+			RestClient client = getClient(appid);
+			if (client != null) {
+				if (ctx.getEntityStream() != null && ctx.getEntityStream().available() > 0) {
+					HttpEntity body = new InputStreamEntity(ctx.getEntityStream(), ContentType.APPLICATION_JSON);
+					resp = client.performRequest(method, path, Collections.emptyMap(), body, headers).getEntity();
+				} else {
+					resp = client.performRequest(method, path, headers).getEntity();
+				}
+				if (resp != null && resp.getContent() != null) {
+					Header type = resp.getContentType();
+					return Response.ok(resp.getContent()).header(type.getName(), type.getValue()).build();
+				}
 			}
 		} catch (Exception ex) {
 			logger.warn("Failed to proxy '{} {}' to Elasticsearch: {}", method, path, ex.getMessage());
