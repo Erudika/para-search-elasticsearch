@@ -87,12 +87,12 @@ DELETE /v1/_elasticsearch/tweet%2f1
 
 ```java
 Response res = paraClient.invokePost("_elasticsearch/_count",
-				Entity.json(Collections.singletonMap("query",
-										Collections.singletonMap("term",
-										Collections.singletonMap("type", "cat")))));
+   Entity.json(Collections.singletonMap("query",
+               Collections.singletonMap("term",
+               Collections.singletonMap("type", "cat")))));
 ```
 If the `path` parameter is omitted, it defaults to `_search`.
-The endpoint accepts request to either `/v1/_elasticsearch` or /v1/_elasticsearch/{path}` where `path` is a URL-encoded
+The endpoint accepts request to either `/v1/_elasticsearch` or `/v1/_elasticsearch/{path}` where `path` is a URL-encoded
 path parameter, which can also be supplied as query string (e.g. `/v1/_elasticsearch?path=...`)
 
 **Note:** This endpoint requires authentication and unsigned requests are not allowed. Keep in mind that all requests
