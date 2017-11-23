@@ -417,7 +417,7 @@ public class ElasticSearch implements Search {
 		// then find their parent objects
 		String[] parentids = new String[hits1.getHits().length];
 		for (int i = 0; i < hits1.getHits().length; i++) {
-			Object pid = hits1.getAt(i).getSource().get(Config._PARENTID);
+			Object pid = hits1.getAt(i).getSourceAsMap().get(Config._PARENTID);
 			if (pid != null) {
 				parentids[i] = (String) pid;
 			}
@@ -452,12 +452,12 @@ public class ElasticSearch implements Search {
 		try {
 			for (SearchHit hit : hits) {
 				if (readFromIndex) {
-					P pobj = ElasticSearchUtils.getParaObjectFromSource(hit.getSource());
+					P pobj = ElasticSearchUtils.getParaObjectFromSource(hit.getSourceAsMap());
 					results.add(pobj);
 				} else {
 					keys.add(hit.getId());
 				}
-				logger.debug("Search result: appid={}, {}->{}", appid, hit.getSource().get(Config._APPID), hit.getId());
+				logger.debug("Search result: appid={}, {}->{}", appid, hit.getSourceAsMap().get(Config._APPID), hit.getId());
 			}
 
 			if (!readFromIndex && !keys.isEmpty()) {
@@ -467,7 +467,7 @@ public class ElasticSearch implements Search {
 					String key = keys.get(i);
 					P pobj = fromDB.get(key);
 					if (pobj == null) {
-						pobj = ElasticSearchUtils.getParaObjectFromSource(hits.getAt(i).getSource());
+						pobj = ElasticSearchUtils.getParaObjectFromSource(hits.getAt(i).getSourceAsMap());
 						// object is still in index but not in DB
 						if (pobj != null && appid.equals(pobj.getAppid()) && pobj.getStored()) {
 							nullz.add(key);

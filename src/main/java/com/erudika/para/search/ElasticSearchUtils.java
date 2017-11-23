@@ -48,7 +48,7 @@ import org.elasticsearch.cluster.health.ClusterHealthStatus;
 import org.elasticsearch.cluster.metadata.AliasMetaData;
 import org.elasticsearch.common.collect.ImmutableOpenMap;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.common.transport.InetSocketTransportAddress;
+import org.elasticsearch.common.transport.TransportAddress;
 import org.elasticsearch.common.xcontent.XContentType;
 import org.elasticsearch.index.query.BoolQueryBuilder;
 import org.elasticsearch.index.query.QueryBuilder;
@@ -119,11 +119,11 @@ public final class ElasticSearchUtils {
 
 		if (useTransportClient) {
 			searchClient = new PreBuiltTransportClient(settings.build());
-			InetSocketTransportAddress addr;
+			TransportAddress addr;
 			try {
-				addr = new InetSocketTransportAddress(InetAddress.getByName(esHost), esPort);
+				addr = new TransportAddress(InetAddress.getByName(esHost), esPort);
 			} catch (UnknownHostException ex) {
-				addr = new InetSocketTransportAddress(InetAddress.getLoopbackAddress(), esPort);
+				addr = new TransportAddress(InetAddress.getLoopbackAddress(), esPort);
 				logger.warn("Unknown host: " + esHost, ex);
 			}
 			searchClient.addTransportAddress(addr);
