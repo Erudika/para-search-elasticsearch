@@ -38,15 +38,13 @@ import org.elasticsearch.action.admin.cluster.node.info.NodeInfo;
 import org.elasticsearch.action.admin.cluster.node.info.NodesInfoRequest;
 import org.elasticsearch.action.admin.cluster.node.info.NodesInfoResponse;
 import org.elasticsearch.action.admin.indices.alias.IndicesAliasesRequest.AliasActions;
-import org.elasticsearch.action.admin.indices.alias.get.GetAliasesResponse;
 import org.elasticsearch.action.admin.indices.create.CreateIndexRequestBuilder;
+import org.elasticsearch.action.admin.indices.get.GetIndexResponse;
 import org.elasticsearch.action.bulk.BulkRequestBuilder;
 import org.elasticsearch.action.bulk.BulkResponse;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.client.transport.TransportClient;
 import org.elasticsearch.cluster.health.ClusterHealthStatus;
-import org.elasticsearch.cluster.metadata.AliasMetaData;
-import org.elasticsearch.common.collect.ImmutableOpenMap;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.transport.TransportAddress;
 import org.elasticsearch.common.xcontent.XContentType;
@@ -237,7 +235,7 @@ public final class ElasticSearchUtils {
 			return false;
 		}
 		try {
-			String indexName = appid.trim();
+			String indexName = getIndexNameWithWildcard(appid.trim());
 			logger.info("Deleted ES index '{}'.", indexName);
 			getClient().admin().indices().prepareDelete(indexName).execute().actionGet();
 		} catch (Exception e) {
@@ -292,8 +290,8 @@ public final class ElasticSearchUtils {
 			String newName = indexName;
 
 			if (!isShared) {
-				newName = oldName.substring(0, oldName.indexOf('_')) + "_" + Utils.timestamp();
-				createIndexWithoutAlias(newName, -1, -1);
+				newName = oldName.substring(0, oldName.indexOf('_') + 1) + Utils.timestamp();
+				createIndexWithoutAlias(newName, -1, -1); // use defaults
 			}
 
 			logger.info("rebuildIndex(): {}", indexName);
@@ -312,7 +310,7 @@ public final class ElasticSearchUtils {
 				for (ParaObject obj : list) {
 					if (obj != null) {
 						// put objects from DB into the newly created index
-						brb.add(getClient().prepareIndex(newName, obj.getType(), obj.getId()).
+						brb.add(getClient().prepareIndex(newName, getType(), obj.getId()).
 								setSource(getSourceFromParaObject(obj)).request());
 						// index in batches of ${queueSize} objects
 						if (brb.numberOfActions() >= queueSize) {
@@ -371,7 +369,7 @@ public final class ElasticSearchUtils {
 		}
 		try {
 			String alias = aliasName.trim();
-			String index = indexName.trim();
+			String index = getIndexNameWithWildcard(indexName.trim());
 			return getClient().admin().indices().prepareAliases().addAliasAction(AliasActions.add().
 					index(index).alias(alias).searchRouting(alias).indexRouting(alias).
 					filter(QueryBuilders.termQuery(Config._APPID, aliasName))).// DO NOT trim filter query!
@@ -393,7 +391,7 @@ public final class ElasticSearchUtils {
 			return false;
 		}
 		String alias = aliasName.trim();
-		String index = indexName.trim();
+		String index = getIndexNameWithWildcard(indexName.trim());
 		return getClient().admin().indices().prepareAliases().removeAlias(index, alias).
 				execute().actionGet().isAcknowledged();
 	}
@@ -409,7 +407,7 @@ public final class ElasticSearchUtils {
 			return false;
 		}
 		String alias = aliasName.trim();
-		String index = indexName.trim();
+		String index = getIndexNameWithWildcard(indexName.trim());
 		return getClient().admin().indices().prepareAliasesExist(index).addAliases(alias).
 				execute().actionGet().exists();
 	}
@@ -436,7 +434,7 @@ public final class ElasticSearchUtils {
 					execute().actionGet();
 			// delete the old index
 			if (deleteOld) {
-				deleteIndex(oldIndex);
+				deleteIndex(oldName);
 			}
 		} catch (Exception e) {
 			logger.error(null, e);
@@ -450,19 +448,18 @@ public final class ElasticSearchUtils {
 	 */
 	public static String getIndexNameForAlias(String appid) {
 		if (StringUtils.isBlank(appid)) {
-			return "";
+			return appid;
 		}
-		String indexName = appid.trim();
-		GetAliasesResponse get = getClient().admin().indices().
-				prepareGetAliases(indexName).execute().actionGet();
-		ImmutableOpenMap<String, List<AliasMetaData>> aliases = get.getAliases();
-		if (!aliases.isEmpty()) {
-			if (aliases.size() > 1) {
-				logger.warn("More than one index for alias {}", indexName);
+		try {
+			GetIndexResponse result = getClient().admin().indices().prepareGetIndex().
+					setIndices(appid).execute().actionGet();
+			if (result.indices() != null && result.indices().length > 0) {
+				return result.indices()[0];
 			}
-			return aliases.keysIt().next();
+		} catch (Exception e) {
+			logger.error(null, e);
 		}
-		return "";
+		return appid;
 	}
 
 	/**
@@ -597,4 +594,19 @@ public final class ElasticSearchUtils {
 		return appid.trim();
 	}
 
+	/**
+	 * Para indices have 1 type only - "paraobject". From v6 onwards, ES allows only 1 type per index.
+	 * @return "paraobject"
+	 */
+	protected static String getType() {
+		return ParaObject.class.getSimpleName().toLowerCase();
+	}
+
+	/**
+	 * @param indexName index name or alias
+	 * @return e.g. "index-name_*"
+	 */
+	protected static String getIndexNameWithWildcard(String indexName) {
+		return StringUtils.contains(indexName, "_") ? indexName : indexName + "_*"; // ES v6
+	}
 }

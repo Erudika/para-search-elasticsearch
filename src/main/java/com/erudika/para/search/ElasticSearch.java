@@ -28,6 +28,7 @@ import com.erudika.para.persistence.DAO;
 import static com.erudika.para.search.ElasticSearchUtils.getIndexName;
 import static com.erudika.para.search.ElasticSearchUtils.getPager;
 import static com.erudika.para.search.ElasticSearchUtils.getTermsQuery;
+import static com.erudika.para.search.ElasticSearchUtils.getType;
 import static com.erudika.para.search.ElasticSearchUtils.isAsyncEnabled;
 import static com.erudika.para.search.ElasticSearchUtils.qs;
 import com.erudika.para.utils.Config;
@@ -141,7 +142,7 @@ public class ElasticSearch implements Search {
 			return;
 		}
 		try {
-			IndexRequestBuilder irb = client().prepareIndex(getIndexName(appid), po.getType(), po.getId()).
+			IndexRequestBuilder irb = client().prepareIndex(getIndexName(appid), getType(), po.getId()).
 					setSource(ElasticSearchUtils.getSourceFromParaObject(po));
 			if (isAsyncEnabled()) {
 				irb.execute();
@@ -160,7 +161,7 @@ public class ElasticSearch implements Search {
 			return;
 		}
 		try {
-			DeleteRequestBuilder drb = client().prepareDelete(getIndexName(appid), po.getType(), po.getId());
+			DeleteRequestBuilder drb = client().prepareDelete(getIndexName(appid), getType(), po.getId());
 			if (isAsyncEnabled()) {
 				drb.execute();
 			} else {
@@ -179,7 +180,7 @@ public class ElasticSearch implements Search {
 		}
 		BulkRequestBuilder brb = client().prepareBulk();
 		for (ParaObject po : objects) {
-			brb.add(client().prepareIndex(getIndexName(appid), po.getType(), po.getId()).
+			brb.add(client().prepareIndex(getIndexName(appid), getType(), po.getId()).
 					setSource(ElasticSearchUtils.getSourceFromParaObject(po)));
 		}
 		if (brb.numberOfActions() > 0) {
@@ -199,7 +200,7 @@ public class ElasticSearch implements Search {
 		}
 		BulkRequestBuilder brb = client().prepareBulk();
 		for (ParaObject po : objects) {
-			brb.add(client().prepareDelete(getIndexName(appid), po.getType(), po.getId()));
+			brb.add(client().prepareDelete(getIndexName(appid), getType(), po.getId()));
 		}
 		if (brb.numberOfActions() > 0) {
 			if (isAsyncEnabled()) {
@@ -227,7 +228,7 @@ public class ElasticSearch implements Search {
 		BulkRequestBuilder brb = client().prepareBulk();
 		while (true) {
 			for (SearchHit hit : scrollResp.getHits()) {
-				brb.add(new DeleteRequest(getIndexName(appid), hit.getType(), hit.getId()));
+				brb.add(new DeleteRequest(getIndexName(appid), getType(), hit.getId()));
 			}
 			// next page
 			scrollResp = client().prepareSearchScroll(scrollResp.getScrollId()).
@@ -252,7 +253,7 @@ public class ElasticSearch implements Search {
 	@Override
 	public <P extends ParaObject> P findById(String appid, String id) {
 		try {
-			return ElasticSearchUtils.getParaObjectFromSource(getSource(appid, id, null));
+			return ElasticSearchUtils.getParaObjectFromSource(getSource(appid, id));
 		} catch (Exception e) {
 			logger.warn(null, e);
 			return null;
@@ -423,8 +424,10 @@ public class ElasticSearch implements Search {
 			}
 		}
 
-		QueryBuilder qb2 = QueryBuilders.boolQuery().must(QueryBuilders.queryStringQuery(qs(query))).
-				filter(QueryBuilders.idsQuery(type).addIds(parentids));
+		QueryBuilder qb2 = QueryBuilders.boolQuery().
+				must(QueryBuilders.queryStringQuery(qs(query))).
+				filter(QueryBuilders.idsQuery().addIds(parentids));
+
 		SearchHits hits2 = searchQueryRaw(appid, type, qb2, page);
 
 		return searchQuery(appid, hits2);
@@ -512,6 +515,9 @@ public class ElasticSearch implements Search {
 		if (query == null) {
 			query = QueryBuilders.matchAllQuery();
 		}
+		if (!StringUtils.isBlank(type)) {
+			query = QueryBuilders.boolQuery().must(query).must(QueryBuilders.termQuery(Config._TYPE, type));
+		}
 
 		SearchHits hits = null;
 
@@ -532,9 +538,6 @@ public class ElasticSearch implements Search {
 				srb.addSort(sort);
 			}
 
-			if (!StringUtils.isBlank(type)) {
-				srb.setTypes(type);
-			}
 			logger.debug("Elasticsearch query: {}", srb.toString());
 
 			hits = srb.execute().actionGet().getHits();
@@ -559,23 +562,16 @@ public class ElasticSearch implements Search {
 	 * The source is extracted from the index directly not the data store.
 	 * @param appid name of the {@link com.erudika.para.core.App}
 	 * @param key the object id
-	 * @param type type of object
 	 * @return a map representation of the object
 	 */
-	protected Map<String, Object> getSource(String appid, String key, String type) {
+	protected Map<String, Object> getSource(String appid, String key) {
 		Map<String, Object> map = new HashMap<String, Object>();
 		if (StringUtils.isBlank(key) || StringUtils.isBlank(appid)) {
 			return map;
 		}
 
 		try {
-			GetRequestBuilder grb = client().prepareGet().
-					setIndex(getIndexName(appid)).setId(key);
-
-			if (!StringUtils.isBlank(type)) {
-				grb.setType(type);
-			}
-
+			GetRequestBuilder grb = client().prepareGet().setIndex(getIndexName(appid)).setId(key);
 			GetResponse gres = grb.execute().actionGet();
 			if (gres.isExists()) {
 				map = gres.getSource();
@@ -595,15 +591,15 @@ public class ElasticSearch implements Search {
 		if (StringUtils.isBlank(appid)) {
 			return 0L;
 		}
+		QueryBuilder query;
+		if (!StringUtils.isBlank(type)) {
+			query = QueryBuilders.termQuery(Config._TYPE, type);
+		} else {
+			query = QueryBuilders.matchAllQuery();
+		}
 		Long count = 0L;
 		try {
-			SearchRequestBuilder crb = client().prepareSearch(getIndexName(appid)).setSize(0).
-					setQuery(QueryBuilders.matchAllQuery());
-
-			if (!StringUtils.isBlank(type)) {
-				crb.setTypes(type);
-			}
-
+			SearchRequestBuilder crb = client().prepareSearch(getIndexName(appid)).setSize(0).setQuery(query);
 			count = crb.execute().actionGet().getHits().getTotalHits();
 		} catch (Exception e) {
 			Throwable cause = e.getCause();
@@ -619,17 +615,13 @@ public class ElasticSearch implements Search {
 			return 0L;
 		}
 		Long count = 0L;
-		QueryBuilder fb = getTermsQuery(terms, true);
-		if (fb == null) {
-			return 0L;
-		} else {
+		QueryBuilder query = getTermsQuery(terms, true);
+		if (query != null) {
+			if (!StringUtils.isBlank(type)) {
+				query = QueryBuilders.boolQuery().must(query).must(QueryBuilders.termQuery(Config._TYPE, type));
+			}
 			try {
-				SearchRequestBuilder crb = client().prepareSearch(getIndexName(appid)).setSize(0).setQuery(fb);
-
-				if (!StringUtils.isBlank(type)) {
-					crb.setTypes(type);
-				}
-
+				SearchRequestBuilder crb = client().prepareSearch(getIndexName(appid)).setSize(0).setQuery(query);
 				count = crb.execute().actionGet().getHits().getTotalHits();
 			} catch (Exception e) {
 				Throwable cause = e.getCause();
