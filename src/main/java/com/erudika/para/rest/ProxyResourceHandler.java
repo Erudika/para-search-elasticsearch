@@ -18,11 +18,17 @@
 package com.erudika.para.rest;
 
 import com.erudika.para.core.App;
+import com.erudika.para.core.utils.CoreUtils;
 import com.erudika.para.core.utils.ParaObjectUtils;
+import com.erudika.para.persistence.DAO;
+import com.erudika.para.search.ElasticSearchUtils;
 import com.erudika.para.utils.Config;
+import com.erudika.para.utils.Pager;
 import com.erudika.para.utils.Utils;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import static javax.ws.rs.HttpMethod.DELETE;
 import static javax.ws.rs.HttpMethod.GET;
 import static javax.ws.rs.HttpMethod.PATCH;
@@ -31,6 +37,7 @@ import static javax.ws.rs.HttpMethod.PUT;
 import javax.ws.rs.container.ContainerRequestContext;
 import javax.ws.rs.core.HttpHeaders;
 import static javax.ws.rs.core.HttpHeaders.CONTENT_LENGTH;
+import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.Response;
 import org.apache.commons.lang3.StringUtils;
@@ -104,6 +111,10 @@ public class ProxyResourceHandler implements CustomResourceHandler {
 			path = "_search";
 		}
 		try {
+			if ("reindex".equals(path) && POST.equals(method)) {
+				return handleReindexTask(appid);
+			}
+
 			Header[] headers = getHeaders(ctx.getHeaders());
 			HttpEntity resp;
 			RestClient client = getClient(appid);
@@ -179,6 +190,26 @@ public class ProxyResourceHandler implements CustomResourceHandler {
 	private String getPath(ContainerRequestContext ctx) {
 		String path = ctx.getUriInfo().getPathParameters(true).getFirst("path");
 		return StringUtils.isBlank(path) ? ctx.getUriInfo().getQueryParameters().getFirst("path") : path;
+	}
+
+	private Response handleReindexTask(String appid) {
+		if (!Config.getConfigBoolean("es.proxy_reindexing_enabled", false) || appid == null) {
+			return Response.status(Response.Status.FORBIDDEN.getStatusCode(), "This feature is disabled.").build();
+		}
+		Pager pager = new Pager();
+		DAO dao = CoreUtils.getInstance().getDao();
+		App app = dao.read(App.id(appid));
+		if (app != null) {
+			long startTime = System.nanoTime();
+			ElasticSearchUtils.rebuildIndex(dao, appid, app.isSharingIndex(), pager);
+			long tookMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startTime);
+			Map<String, Object> response = new HashMap<String, Object>();
+			response.put("reindexed", pager.getCount());
+			response.put("tookMillis", tookMillis);
+			return Response.ok(response, MediaType.APPLICATION_JSON).build();
+		} else {
+			return Response.status(404, "App not found.").build();
+		}
 	}
 
 }

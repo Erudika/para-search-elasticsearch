@@ -77,27 +77,43 @@ This tells Para to use the Elasticsearch implementation instead of the default (
 
 You can directly call the Elasticsearch API through `/v1/_elasticsearch`. To enable it set `para.es.proxy_enabled = true` first.
 Then you must specify the `path` parameter corresponds to the Elasticsearch API resource path. This is done for every
-`GET`, `PUT`, `POST`, `PATCH` or `DELETE` request to Elasticsearch:
+`GET`, `PUT`, `POST`, `PATCH` or `DELETE` request to Elasticsearch. The endpoint accepts request to either
+`/v1/_elasticsearch` or `/v1/_elasticsearch/{path}` where `path` is a URL-encoded path parameter.
+**Do not add query parameters to the request path with `?`, instead, pass them as a parameter map.**
 
 ```
-GET /v1/_elasticsearch?path=_search
+GET /v1/_elasticsearch/_search
+GET /v1/_elasticsearch/mytype%2f_search
 DELETE /v1/_elasticsearch/tweet%2f1
 ```
 `ParaClient` example:
 
 ```java
-Response res = paraClient.invokePost("_elasticsearch/_count",
+Response get = paraClient.invokeGet("_elasticsearch/" + Utils.urlEncode("tweet/_search"), params);
+
+Response post = paraClient.invokePost("_elasticsearch/_count",
    Entity.json(Collections.singletonMap("query",
                Collections.singletonMap("term",
                Collections.singletonMap("type", "cat")))));
 ```
 If the `path` parameter is omitted, it defaults to `_search`.
-The endpoint accepts request to either `/v1/_elasticsearch` or `/v1/_elasticsearch/{path}` where `path` is a URL-encoded
-path parameter, which can also be supplied as query string (e.g. `/v1/_elasticsearch?path=...`)
 
 **Note:** This endpoint requires authentication and unsigned requests are not allowed. Keep in mind that all requests
 to Elasticsearch are prefixed with the app identifier. For example if the app id is "app:myapp, then Para will proxy
 requests to Elasticsearch at `http://eshost:9200/myapp/{path}`.
+
+### Rebuilding indices through the Elasticsearch proxy endpoint
+
+You can rebuild the whole app index from scratch by calling `POST /v1/_elasticsearch/reindex`. To enable it set
+`para.es.proxy_reindexing_enabled = true` first. This operation executes `ElasticSearchUtils.rebuildIndex()` internally,
+and returns a response indicating the number of reindexed objects and the elapsed time:
+
+```
+{
+   "reindexed": 154,
+   "tookMillis": 365
+}
+```
 
 ### Requirements
 
