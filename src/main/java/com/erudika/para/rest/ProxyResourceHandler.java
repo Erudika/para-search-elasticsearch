@@ -107,9 +107,6 @@ public class ProxyResourceHandler implements CustomResourceHandler {
 		if (StringUtils.isBlank(appid)) {
 			return Response.status(Response.Status.BAD_REQUEST).build();
 		}
-		if (StringUtils.isBlank(path)) {
-			path = "_search";
-		}
 		try {
 			if ("reindex".equals(path) && POST.equals(method)) {
 				return handleReindexTask(appid);
@@ -189,7 +186,7 @@ public class ProxyResourceHandler implements CustomResourceHandler {
 
 	private String getPath(ContainerRequestContext ctx) {
 		String path = ctx.getUriInfo().getPathParameters(true).getFirst("path");
-		return StringUtils.isBlank(path) ? ctx.getUriInfo().getQueryParameters().getFirst("path") : path;
+		return StringUtils.isBlank(path) ? "_search" : path;
 	}
 
 	private Response handleReindexTask(String appid) {
