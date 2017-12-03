@@ -25,6 +25,7 @@ import com.erudika.para.utils.Pager;
 import com.erudika.para.utils.Utils;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -52,6 +53,9 @@ import org.elasticsearch.index.query.BoolQueryBuilder;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.index.query.RangeQueryBuilder;
+import org.elasticsearch.search.sort.SortBuilder;
+import org.elasticsearch.search.sort.SortBuilders;
+import org.elasticsearch.search.sort.SortOrder;
 import org.elasticsearch.transport.client.PreBuiltTransportClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -344,8 +348,48 @@ public final class ElasticSearchUtils {
 		return true;
 	}
 
+	/**
+	 * @param pager an array of optional Pagers
+	 * @return the first {@link Pager} object in the array or a new Pager
+	 */
 	protected static Pager getPager(Pager[] pager) {
 		return (pager != null && pager.length > 0) ? pager[0] : new Pager();
+	}
+
+	/**
+	 * The {@code pager.sortBy} can contain comma-separated sort fields. For example "name,timestamp".
+	 * It can also contain sort orders for each field, for example: "name:asc,timestamp:desc".
+	 * @param pager a {@link Pager} object
+	 * @return a list of ES SortBuilder objects for sorting the results of a search request
+	 */
+	protected static List<SortBuilder<?>> getSortFieldsFromPager(Pager pager) {
+		if (pager == null) {
+			pager = new Pager();
+		}
+		SortOrder defaultOrder = pager.isDesc() ? SortOrder.DESC : SortOrder.ASC;
+		if (pager.getSortby().contains(",")) {
+			String[] fields = pager.getSortby().split(",");
+			ArrayList<SortBuilder<?>> sortFields = new ArrayList<>(fields.length);
+			for (String field : fields) {
+				SortOrder order;
+				String fieldName;
+				if (field.endsWith(":asc")) {
+					order = SortOrder.ASC;
+					fieldName = field.substring(0, field.indexOf(":asc")).trim();
+				} else if (field.endsWith(":desc")) {
+					order = SortOrder.DESC;
+					fieldName = field.substring(0, field.indexOf(":desc")).trim();
+				} else {
+					order = defaultOrder;
+					fieldName = field.trim();
+				}
+				sortFields.add(SortBuilders.fieldSort(fieldName).order(order));
+			}
+			return sortFields;
+		} else {
+			return Collections.singletonList(StringUtils.isBlank(pager.getSortby()) ?
+					SortBuilders.scoreSort() : SortBuilders.fieldSort(pager.getSortby()).order(defaultOrder));
+		}
 	}
 
 	/**

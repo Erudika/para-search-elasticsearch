@@ -532,10 +532,10 @@ public class ElasticSearch implements Search {
 				srb.setFrom(0);
 				srb.addSort(SortBuilders.fieldSort("_docid").order(order));
 			} else {
-				SortBuilder<?> sort = StringUtils.isBlank(page.getSortby()) ? SortBuilders.scoreSort()
-						: SortBuilders.fieldSort(page.getSortby()).order(order);
 				srb.setFrom(start);
-				srb.addSort(sort);
+				for (SortBuilder<?> sortField : ElasticSearchUtils.getSortFieldsFromPager(page)) {
+					srb.addSort(sortField);
+				}
 			}
 
 			logger.debug("Elasticsearch query: {}", srb.toString());
