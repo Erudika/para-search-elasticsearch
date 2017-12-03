@@ -294,8 +294,8 @@ public final class ElasticSearchUtils {
 			String newName = indexName;
 
 			if (!isShared) {
-				newName = oldName.substring(0, oldName.indexOf('_') + 1) + Utils.timestamp();
-				createIndexWithoutAlias(newName, -1, -1); // use defaults
+				newName = oldName.contains("_") ? oldName.substring(0, oldName.indexOf('_')) : indexName;
+				createIndexWithoutAlias(newName + "_" + Utils.timestamp(), -1, -1); // use defaults
 			}
 
 			logger.info("rebuildIndex(): {}", indexName);
