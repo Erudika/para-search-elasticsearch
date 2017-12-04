@@ -294,8 +294,8 @@ public final class ElasticSearchUtils {
 			String newName = indexName;
 
 			if (!isShared) {
-				newName = oldName.contains("_") ? oldName.substring(0, oldName.indexOf('_')) : indexName;
-				createIndexWithoutAlias(newName + "_" + Utils.timestamp(), -1, -1); // use defaults
+				newName = getNewIndexName(indexName, oldName);
+				createIndexWithoutAlias(newName, -1, -1); // use defaults
 			}
 
 			logger.info("rebuildIndex(): {}", indexName);
@@ -504,6 +504,18 @@ public final class ElasticSearchUtils {
 			logger.error(null, e);
 		}
 		return appid;
+	}
+
+	/**
+	 * @param appid the index name (alias)
+	 * @param oldName old index name
+	 * @return a new index name, e.g. "app_15698795757"
+	 */
+	static String getNewIndexName(String appid, String oldName) {
+		if (StringUtils.isBlank(appid)) {
+			return appid;
+		}
+		return (oldName.contains("_") ? oldName.substring(0, oldName.indexOf('_')) : appid) + "_" + Utils.timestamp();
 	}
 
 	/**

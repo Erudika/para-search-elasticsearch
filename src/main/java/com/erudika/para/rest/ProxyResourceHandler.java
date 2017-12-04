@@ -18,6 +18,7 @@
 package com.erudika.para.rest;
 
 import com.erudika.para.core.App;
+import com.erudika.para.core.ParaObject;
 import com.erudika.para.core.utils.CoreUtils;
 import com.erudika.para.core.utils.ParaObjectUtils;
 import com.erudika.para.persistence.DAO;
@@ -25,8 +26,13 @@ import com.erudika.para.search.ElasticSearchUtils;
 import com.erudika.para.utils.Config;
 import com.erudika.para.utils.Pager;
 import com.erudika.para.utils.Utils;
+import com.fasterxml.jackson.databind.JsonNode;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import static javax.ws.rs.HttpMethod.DELETE;
@@ -124,7 +130,8 @@ public class ProxyResourceHandler implements CustomResourceHandler {
 				}
 				if (resp != null && resp.getContent() != null) {
 					Header type = resp.getContentType();
-					return Response.ok(resp.getContent()).header(type.getName(), type.getValue()).build();
+					Object response = getTransformedResponse(appid, resp.getContent(), ctx);
+					return Response.ok(response).header(type.getName(), type.getValue()).build();
 				}
 			}
 		} catch (Exception ex) {
@@ -206,6 +213,36 @@ public class ProxyResourceHandler implements CustomResourceHandler {
 			return Response.ok(response, MediaType.APPLICATION_JSON).build();
 		} else {
 			return Response.status(404, "App not found.").build();
+		}
+	}
+
+	private Object getTransformedResponse(String appid, InputStream content, ContainerRequestContext ctx) {
+		if (ctx.getUriInfo().getQueryParameters().containsKey("getRawResponse")) {
+			return content;
+		} else {
+			try {
+				JsonNode tree = ParaObjectUtils.getJsonMapper().readTree(content);
+				JsonNode hits = tree.at("/hits/hits");
+				if (hits.isMissingNode()) {
+					return tree;
+				} else {
+					List<String> keys = new LinkedList<String>();
+					long count = tree.at("/hits/total").asLong();
+					for (JsonNode hit : hits) {
+						String id = hit.get("_id").asText();
+						keys.add(id);
+					}
+					DAO dao = CoreUtils.getInstance().getDao();
+					Map<String, ParaObject> fromDB = dao.readAll(appid, keys, true);
+					Map<String, Object> result = new HashMap<>();
+					result.put("items", fromDB);
+					result.put("totalHits", count);
+					return result;
+				}
+			} catch (IOException ex) {
+				logger.error(null, ex);
+			}
+			return Collections.emptyMap();
 		}
 	}
 

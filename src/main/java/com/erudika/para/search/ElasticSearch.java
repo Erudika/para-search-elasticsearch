@@ -449,8 +449,8 @@ public class ElasticSearch implements Search {
 		if (hits == null) {
 			return Collections.emptyList();
 		}
-		ArrayList<P> results = new ArrayList<P>(hits.getHits().length);
-		LinkedList<String> keys = new LinkedList<String>();
+		List<P> results = new ArrayList<P>(hits.getHits().length);
+		List<String> keys = new LinkedList<String>();
 		boolean readFromIndex = Config.getConfigBoolean("read_from_index", Config.ENVIRONMENT.equals("embedded"));
 		try {
 			for (SearchHit hit : hits) {
@@ -464,16 +464,16 @@ public class ElasticSearch implements Search {
 			}
 
 			if (!readFromIndex && !keys.isEmpty()) {
-				ArrayList<String> nullz = new ArrayList<String>(results.size());
+				List<String> objectsMissingFromDB = new ArrayList<String>(results.size());
 				Map<String, P> fromDB = getDAO().readAll(appid, keys, true);
 				for (int i = 0; i < keys.size(); i++) {
 					String key = keys.get(i);
 					P pobj = fromDB.get(key);
 					if (pobj == null) {
 						pobj = ElasticSearchUtils.getParaObjectFromSource(hits.getAt(i).getSourceAsMap());
-						// object is still in index but not in DB
+						// show warning that object is still in index but not in DB
 						if (pobj != null && appid.equals(pobj.getAppid()) && pobj.getStored()) {
-							nullz.add(key);
+							objectsMissingFromDB.add(key);
 						}
 					}
 					if (pobj != null) {
@@ -481,9 +481,9 @@ public class ElasticSearch implements Search {
 					}
 				}
 
-				if (!nullz.isEmpty()) {
+				if (!objectsMissingFromDB.isEmpty()) {
 					logger.warn("Found {} objects that are indexed but not in the database: {}",
-							nullz.size(), nullz);
+							objectsMissingFromDB.size(), objectsMissingFromDB);
 				}
 			}
 		} catch (Exception e) {

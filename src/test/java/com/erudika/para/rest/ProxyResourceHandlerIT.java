@@ -112,12 +112,8 @@ public class ProxyResourceHandlerIT extends JerseyTest {
 		MultivaluedHashMap<String, Object> headers = new MultivaluedHashMap<>();
 		headers.putSingle(HttpHeaders.AUTHORIZATION, JWT);
 
-		Response ok1 = target(PATH).queryParam("path", "_search").request(JSON).headers(headers).get();
+		Response ok1 = target(PATH + "/_search").request(JSON).headers(headers).get();
 		assertEquals(OK.getStatusCode(), ok1.getStatus());
-		// path is given as query parameter
-		Response ok2 = target(PATH).queryParam("path", "cat/_count?q=*").request(JSON).headers(headers).get();
-		assertEquals(OK.getStatusCode(), ok2.getStatus());
-		assertTrue(ok2.readEntity(Map.class).containsKey("count"));
 		// path is URL-encoded
 		Response ok3 = target(PATH + "/" + Utils.urlEncode("cat/_count?q=*")).request(JSON).headers(headers).get();
 		assertEquals(OK.getStatusCode(), ok3.getStatus());
@@ -137,14 +133,23 @@ public class ProxyResourceHandlerIT extends JerseyTest {
 
 		Entity<?> entity1 = Entity.json(Collections.singletonMap("query", Collections.singletonMap("term",
 				Collections.singletonMap("type", "cat"))));
-		Response ok1 = target(PATH).queryParam("path", "_search").request(JSON).headers(headers).post(entity1);
+
+		// this will return the transformed ES JSON response to Para response
+		Response ok1 = target(PATH + "/_search").request(JSON).headers(headers).post(entity1);
 		assertEquals(OK.getStatusCode(), ok1.getStatus());
-		assertTrue(ok1.readEntity(Map.class).containsKey("hits"));
+		Map<?, ?> transformed = ok1.readEntity(Map.class);
+		assertTrue(transformed.containsKey("items"));
+		assertTrue(transformed.containsKey("totalHits"));
 
 		Response ok2 = target(PATH + "/" + Utils.urlEncode("_count?pretty=true")).
 				request(JSON).headers(headers).post(entity1);
 		assertEquals(OK.getStatusCode(), ok2.getStatus());
 		assertTrue(ok2.readEntity(Map.class).containsKey("count"));
+
+		// Return the raw ES JSON
+		Response ok3 = target(PATH + "/_search").queryParam("getRawResponse", 1).request(JSON).headers(headers).post(entity1);
+		assertEquals(OK.getStatusCode(), ok3.getStatus());
+		assertTrue(ok3.readEntity(Map.class).containsKey("hits"));
 	}
 
 	@Test
