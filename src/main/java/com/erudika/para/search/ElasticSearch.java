@@ -99,7 +99,11 @@ public class ElasticSearch implements Search {
 					if (app.isSharingIndex()) {
 						ElasticSearchUtils.addIndexAlias(Config.getRootAppIdentifier(), appid);
 					} else {
-						ElasticSearchUtils.createIndex(appid);
+						int	shards = app.isRootApp() ? Config.getConfigInt("es.shards", 5) :
+								Config.getConfigInt("es.shards_for_child_apps", 2);
+						int	replicas = app.isRootApp() ? Config.getConfigInt("es.replicas", 0) :
+								Config.getConfigInt("es.replicas_for_child_apps", 0);
+						ElasticSearchUtils.createIndex(appid, shards, replicas);
 					}
 				}
 			}
