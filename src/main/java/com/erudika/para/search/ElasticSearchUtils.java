@@ -35,6 +35,8 @@ import java.util.regex.Pattern;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.math.NumberUtils;
 import org.apache.lucene.queryparser.flexible.standard.StandardQueryParser;
+import org.elasticsearch.action.ActionListener;
+import org.elasticsearch.action.DocWriteResponse;
 import org.elasticsearch.action.admin.cluster.node.info.NodeInfo;
 import org.elasticsearch.action.admin.cluster.node.info.NodesInfoRequest;
 import org.elasticsearch.action.admin.cluster.node.info.NodesInfoResponse;
@@ -516,6 +518,43 @@ public final class ElasticSearchUtils {
 			return appid;
 		}
 		return (oldName.contains("_") ? oldName.substring(0, oldName.indexOf('_')) : appid) + "_" + Utils.timestamp();
+	}
+
+	/**
+	 * @param <T> type of ES Response
+	 * @return a callback for handling ES response errors
+	 */
+	public static <T extends DocWriteResponse> ActionListener<T> getIndexResponseHandler() {
+		return new ActionListener<T>() {
+			public void onResponse(T response) {
+				int status = response.status().getStatus();
+				if (status >= 400) {
+					logger.warn("Indexing object {}/{} might have failed - status {}.",
+							response.getIndex(), response.getId(), status);
+				}
+			}
+			public void onFailure(Exception e) {
+				logger.error("Indexing failure: {}", e);
+			}
+		};
+	}
+
+	/**
+	 * @return a callback for handling ES response errors for bulk requests
+	 */
+	public static ActionListener<BulkResponse> getBulkIndexResponseHandler() {
+		return new ActionListener<BulkResponse>() {
+			public void onResponse(BulkResponse response) {
+				int status = response.status().getStatus();
+				if (response.hasFailures() || status >= 400) {
+					logger.warn("Indexing objects in bulk might have failed - status {}. Reason: {}",
+							status, response.buildFailureMessage());
+				}
+			}
+			public void onFailure(Exception e) {
+				logger.error("Bulk indexing failure: {}", e);
+			}
+		};
 	}
 
 	/**

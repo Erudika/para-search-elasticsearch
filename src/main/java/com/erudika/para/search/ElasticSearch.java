@@ -45,13 +45,16 @@ import javax.inject.Singleton;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.math.NumberUtils;
 import static org.apache.lucene.search.join.ScoreMode.Avg;
+import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.bulk.BulkRequestBuilder;
 import org.elasticsearch.action.bulk.BulkResponse;
 import org.elasticsearch.action.delete.DeleteRequest;
 import org.elasticsearch.action.delete.DeleteRequestBuilder;
+import org.elasticsearch.action.delete.DeleteResponse;
 import org.elasticsearch.action.get.GetRequestBuilder;
 import org.elasticsearch.action.get.GetResponse;
 import org.elasticsearch.action.index.IndexRequestBuilder;
+import org.elasticsearch.action.index.IndexResponse;
 import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.action.search.SearchType;
@@ -144,10 +147,11 @@ public class ElasticSearch implements Search {
 		try {
 			IndexRequestBuilder irb = client().prepareIndex(getIndexName(appid), getType(), po.getId()).
 					setSource(ElasticSearchUtils.getSourceFromParaObject(po));
+			ActionListener<IndexResponse> responseHandler = ElasticSearchUtils.getIndexResponseHandler();
 			if (isAsyncEnabled()) {
-				irb.execute();
+				irb.execute(responseHandler);
 			} else {
-				irb.execute().actionGet();
+				responseHandler.onResponse(irb.execute().actionGet());
 			}
 			logger.debug("Search.index() {}", po.getId());
 		} catch (Exception e) {
@@ -162,10 +166,11 @@ public class ElasticSearch implements Search {
 		}
 		try {
 			DeleteRequestBuilder drb = client().prepareDelete(getIndexName(appid), getType(), po.getId());
+			ActionListener<DeleteResponse> responseHandler = ElasticSearchUtils.getIndexResponseHandler();
 			if (isAsyncEnabled()) {
-				drb.execute();
+				drb.execute(responseHandler);
 			} else {
-				drb.execute().actionGet();
+				responseHandler.onResponse(drb.execute().actionGet());
 			}
 			logger.debug("Search.unindex() {}", po.getId());
 		} catch (Exception e) {
@@ -184,10 +189,11 @@ public class ElasticSearch implements Search {
 					setSource(ElasticSearchUtils.getSourceFromParaObject(po)));
 		}
 		if (brb.numberOfActions() > 0) {
+			ActionListener<BulkResponse> responseHandler = ElasticSearchUtils.getBulkIndexResponseHandler();
 			if (isAsyncEnabled()) {
-				brb.execute();
+				brb.execute(responseHandler);
 			} else {
-				brb.execute().actionGet();
+				responseHandler.onResponse(brb.execute().actionGet());
 			}
 		}
 		logger.debug("Search.indexAll() {}", objects.size());
@@ -203,10 +209,11 @@ public class ElasticSearch implements Search {
 			brb.add(client().prepareDelete(getIndexName(appid), getType(), po.getId()));
 		}
 		if (brb.numberOfActions() > 0) {
+			ActionListener<BulkResponse> responseHandler = ElasticSearchUtils.getBulkIndexResponseHandler();
 			if (isAsyncEnabled()) {
-				brb.execute();
+				brb.execute(responseHandler);
 			} else {
-				brb.execute().actionGet();
+				responseHandler.onResponse(brb.execute().actionGet());
 			}
 		}
 		logger.debug("Search.unindexAll() {}", objects.size());
