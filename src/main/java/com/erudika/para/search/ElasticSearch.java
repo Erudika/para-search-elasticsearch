@@ -493,8 +493,8 @@ public class ElasticSearch implements Search {
 				}
 
 				if (!objectsMissingFromDB.isEmpty()) {
-					logger.warn("Found {} objects that are indexed but not in the database: {}",
-							objectsMissingFromDB.size(), objectsMissingFromDB);
+					logger.warn("Found {} objects in app '{}' that are indexed but not in the database: {}",
+							objectsMissingFromDB.size(), appid, objectsMissingFromDB);
 				}
 			}
 		} catch (Exception e) {
