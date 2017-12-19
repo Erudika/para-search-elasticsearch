@@ -25,12 +25,13 @@ import com.erudika.para.persistence.DAO;
 import com.erudika.para.search.ElasticSearchUtils;
 import com.erudika.para.utils.Config;
 import com.erudika.para.utils.Pager;
-import com.erudika.para.utils.Utils;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URISyntaxException;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -50,6 +51,8 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.http.Header;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpHost;
+import org.apache.http.NameValuePair;
+import org.apache.http.client.utils.URIBuilder;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.InputStreamEntity;
 import org.apache.http.message.BasicHeader;
@@ -108,8 +111,8 @@ public class ProxyResourceHandler implements CustomResourceHandler {
 		if (!Config.getConfigBoolean("es.proxy_enabled", false)) {
 			return Response.status(Response.Status.FORBIDDEN.getStatusCode(), "This feature is disabled.").build();
 		}
-		String appid = getAppidFromAuthHeader(ctx.getHeaders().getFirst(HttpHeaders.AUTHORIZATION));
-		String path = getPath(ctx);
+		String appid = ParaObjectUtils.getAppidFromAuthHeader(ctx.getHeaders().getFirst(HttpHeaders.AUTHORIZATION));
+		String path = getCleanPath(getPath(ctx));
 		if (StringUtils.isBlank(appid)) {
 			return Response.status(Response.Status.BAD_REQUEST).build();
 		}
@@ -138,31 +141,6 @@ public class ProxyResourceHandler implements CustomResourceHandler {
 			logger.warn("Failed to proxy '{} {}' to Elasticsearch: {}", method, path, ex.getMessage());
 		}
 		return Response.status(Response.Status.BAD_REQUEST).build();
-	}
-
-	String getAppidFromAuthHeader(String authorization) {
-		if (authorization == null) {
-			return "";
-		}
-		String appid = "";
-		if (StringUtils.startsWith(authorization, "Bearer")) {
-			try {
-				String[] parts = StringUtils.split(authorization, '.');
-				if (parts.length > 1) {
-					Map<String, Object> jwt = ParaObjectUtils.getJsonReader(Map.class).
-							readValue(Utils.base64dec(parts[1]));
-					if (jwt != null && jwt.containsKey(Config._APPID)) {
-						appid = (String) jwt.get(Config._APPID);
-					}
-				}
-			} catch (Exception e) { }
-		} else {
-			appid = StringUtils.substringBetween(authorization, "=", "/");
-		}
-		if (StringUtils.isBlank(appid)) {
-			return "";
-		}
-		return App.id(appid).substring(4);
 	}
 
 	private RestClient getClient(String appid) {
@@ -196,6 +174,26 @@ public class ProxyResourceHandler implements CustomResourceHandler {
 		return StringUtils.isBlank(path) ? "_search" : path;
 	}
 
+	String getCleanPath(String path) {
+		if (StringUtils.containsIgnoreCase(path, "getRawResponse")) {
+			try {
+				URIBuilder uri = new URIBuilder(path);
+				List<NameValuePair> params = uri.getQueryParams();
+				for (Iterator<NameValuePair> iterator = params.iterator(); iterator.hasNext();) {
+					NameValuePair next = iterator.next();
+					if (next.getName().equalsIgnoreCase("getRawResponse")) {
+						iterator.remove();
+						break;
+					}
+				}
+				path = uri.setParameters(params).toString();
+			} catch (URISyntaxException ex) {
+				logger.warn(null, ex);
+			}
+		}
+		return StringUtils.isBlank(path) ? "_search" : path;
+	}
+
 	private Response handleReindexTask(String appid) {
 		if (!Config.getConfigBoolean("es.proxy_reindexing_enabled", false) || appid == null) {
 			return Response.status(Response.Status.FORBIDDEN.getStatusCode(), "This feature is disabled.").build();
@@ -217,7 +215,8 @@ public class ProxyResourceHandler implements CustomResourceHandler {
 	}
 
 	private Object getTransformedResponse(String appid, InputStream content, ContainerRequestContext ctx) {
-		if (ctx.getUriInfo().getQueryParameters().containsKey("getRawResponse")) {
+		if (ctx.getUriInfo().getQueryParameters().containsKey("getRawResponse") ||
+				StringUtils.containsIgnoreCase(getPath(ctx), "getRawResponse=")) {
 			return content;
 		} else {
 			try {

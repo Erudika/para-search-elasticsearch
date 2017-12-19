@@ -95,6 +95,17 @@ public class ProxyResourceHandlerIT extends JerseyTest {
 	}
 
 	@Test
+	public void testGetCleanPath() {
+		ProxyResourceHandler prh = new ProxyResourceHandler();
+		assertEquals(prh.getCleanPath(""), "_search");
+		assertEquals(prh.getCleanPath("_search?param=123"), "_search?param=123");
+		assertEquals(prh.getCleanPath("_search?param=123&param2=345"), "_search?param=123&param2=345");
+		assertEquals(prh.getCleanPath("_search?getRawResponse=true&param2=345"), "_search?param2=345");
+		assertEquals(prh.getCleanPath("_search?getRawResponse=1&param2=345"), "_search?param2=345");
+		assertEquals(prh.getCleanPath("_search?getrawresponse=1&param2=345"), "_search?param2=345");
+	}
+
+	@Test
 	public void testProxyDisabledByDefault() {
 		System.setProperty("para.es.proxy_enabled", "false");
 		Response response1 = target(PATH).request(JSON).get();
@@ -150,28 +161,6 @@ public class ProxyResourceHandlerIT extends JerseyTest {
 		Response ok3 = target(PATH + "/_search").queryParam("getRawResponse", 1).request(JSON).headers(headers).post(entity1);
 		assertEquals(OK.getStatusCode(), ok3.getStatus());
 		assertTrue(ok3.readEntity(Map.class).containsKey("hits"));
-	}
-
-	@Test
-	public void testGetAppidFromAuthHeader() {
-		ProxyResourceHandler instance = new ProxyResourceHandler();
-		String jwtGood1 = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBpZCI6ImFwcDpteWFwcCJ9."
-				+ "M4uitKDuclLuZzadxNzL_3fjeShKBxPdncsNKkA-rfY";
-		String jwtGood2 = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBpZCI6Im15YXBwIn0."
-				+ "rChFKBeaKvlV9p_dkMveh1v85YT144IHilaeMpuVhx8";
-		String jwtBad1 = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9";
-		String jwtBad2 = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzIjoibXlhcHAifQ."
-				+ "0nqax4hqUIRGhtmPIhLbUgCrnKJFC1q3eIeRkgQX8F0";
-		String signature = "AWS4-HMAC-SHA256 Credential=app:myapp/20171103/us-east-1/para/aws4_request, "
-				+ "SignedHeaders=content-type;host;x-amz-date, Signature=d60fd1be560d3ed14ff383061772055";
-
-		assertEquals("", instance.getAppidFromAuthHeader(null));
-		assertEquals("", instance.getAppidFromAuthHeader(" "));
-		assertEquals("", instance.getAppidFromAuthHeader("Bearer " + jwtBad1));
-		assertEquals("", instance.getAppidFromAuthHeader("Bearer " + jwtBad2));
-		assertEquals("myapp", instance.getAppidFromAuthHeader("Bearer " + jwtGood1));
-		assertEquals("myapp", instance.getAppidFromAuthHeader("Bearer " + jwtGood2));
-		assertEquals("myapp", instance.getAppidFromAuthHeader(signature));
 	}
 
 	private void register(ResourceConfig resource, ProxyResourceHandler proxy) {
