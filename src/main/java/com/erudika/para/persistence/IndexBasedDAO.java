@@ -194,11 +194,15 @@ public class IndexBasedDAO implements DAO {
 	public <P extends ParaObject> void updateAll(String appid, List<P> objects) {
 		if (!StringUtils.isBlank(appid) && objects != null) {
 			for (P obj : objects) {
-				if (obj != null) {
-					update(appid, obj);
+				if (obj != null && !StringUtils.isBlank(appid)) {
+					obj.setUpdated(Utils.timestamp());
+					obj.setIndexed(false); // skip indexing - already indexed here
+					ParaObject soUpdated = read(appid, obj.getId());
+					search.index(appid, ParaObjectUtils.setAnnotatedFields(soUpdated,
+							ParaObjectUtils.getAnnotatedFields(obj), Locked.class));
 				}
 			}
-			logger.debug("DAO.updateAll() {}", objects.size());
+			logger.error("DAO.updateAll() {}", objects.size());
 		}
 	}
 
