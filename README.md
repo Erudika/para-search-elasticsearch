@@ -98,6 +98,28 @@ Response post = paraClient.invokePost("_elasticsearch/_count",
 ```
 If the `path` parameter is omitted, it defaults to `_search`.
 
+The response object will be transformed to be compatible with Para clients an looks like this:
+
+```js
+{
+	"page":0,
+	"totalHits":3,
+	"items":[{...}]
+}
+```
+
+If you wish to get the raw query response from Elasticsearch, add the parameter `getRawResponse=true` to the requst
+path and also URL-encode it:
+```
+GET /v1/_elasticsearch/mytype%2f_search%3FgetRawResponse%3Dtrue
+```
+Equivalently, the same can be done by adding the query parameter using `ParaClient`:
+```
+MultivaluedHashMap<String, String> params = new MultivaluedHashMap<>();
+params.putSingle("getRawRequest", "true");
+paraClient.invokeGet("_elasticsearch/" + Utils.urlEncode("mytype/_search"), params);
+```
+
 **Note:** This endpoint requires authentication and unsigned requests are not allowed. Keep in mind that all requests
 to Elasticsearch are prefixed with the app identifier. For example if the app id is "app:myapp, then Para will proxy
 requests to Elasticsearch at `http://eshost:9200/myapp/{path}`.
