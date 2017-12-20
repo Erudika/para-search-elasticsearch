@@ -55,7 +55,7 @@
 		<skipTests>false</skipTests>
 		<skipITs>${skipTests}</skipITs>
 		<skipUTs>${skipTests}</skipUTs>
-		<elasticsearch.version>6.0.0</elasticsearch.version>
+		<elasticsearch.version>6.1.0</elasticsearch.version>
 		<jerseyVer>2.26</jerseyVer>
 	</properties>
 
@@ -63,7 +63,7 @@
 		<dependency>
 			<groupId>com.erudika</groupId>
 			<artifactId>para-core</artifactId>
-			<version>1.26.3-SNAPSHOT</version>
+			<version>1.27.0</version>
 			<scope>provided</scope>
 		</dependency>
 		<dependency>

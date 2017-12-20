@@ -177,7 +177,7 @@ public final class ElasticSearchUtils {
 			settings.put("number_of_replicas", Integer.toString(replicas));
 			settings.put("auto_expand_replicas", Config.getConfigParam("es.auto_expand_replicas", "0-1"));
 			settings.put("analysis.analyzer.default.type", "standard");
-			settings.putArray("analysis.analyzer.default.stopwords",
+			settings.putList("analysis.analyzer.default.stopwords",
 					"arabic", "armenian", "basque", "brazilian", "bulgarian", "catalan",
 					"czech", "danish", "dutch", "english", "finnish", "french", "galician",
 					"german", "greek", "hindi", "hungarian", "indonesian", "italian",
