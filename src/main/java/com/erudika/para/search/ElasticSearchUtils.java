@@ -304,10 +304,9 @@ public final class ElasticSearchUtils {
 
 			BulkRequestBuilder brb = getClient().prepareBulk();
 			BulkResponse resp;
-			int queueSize = 50;
-			int count = 0;
 			Pager p = getPager(pager);
-			p.setLimit(100);
+			int batchSize = Config.getConfigInt("reindex_batch_size", p.getLimit());
+			long reindexedCount = 0;
 
 			List<ParaObject> list;
 			do {
@@ -319,8 +318,8 @@ public final class ElasticSearchUtils {
 						brb.add(getClient().prepareIndex(newName, getType(), obj.getId()).
 								setSource(getSourceFromParaObject(obj)).request());
 						// index in batches of ${queueSize} objects
-						if (brb.numberOfActions() >= queueSize) {
-							count += brb.numberOfActions();
+						if (brb.numberOfActions() >= batchSize) {
+							reindexedCount += brb.numberOfActions();
 							resp = brb.execute().actionGet();
 							logger.info("rebuildIndex(): indexed {}, failures: {}",
 									brb.numberOfActions(), resp.hasFailures() ? resp.buildFailureMessage() : "false");
@@ -332,7 +331,7 @@ public final class ElasticSearchUtils {
 
 			// anything left after loop? index that too
 			if (brb.numberOfActions() > 0) {
-				count += brb.numberOfActions();
+				reindexedCount += brb.numberOfActions();
 				resp = brb.execute().actionGet();
 				logger.info("rebuildIndex(): indexed {}, failures: {}",
 						brb.numberOfActions(), resp.hasFailures() ? resp.buildFailureMessage() : "false");
@@ -342,7 +341,7 @@ public final class ElasticSearchUtils {
 				// switch to alias NEW_INDEX -> ALIAS, OLD_INDEX -> DELETE old index
 				switchIndexToAlias(oldName, newName, indexName, true);
 			}
-			logger.info("rebuildIndex(): Done. {} objects reindexed.", count);
+			logger.info("rebuildIndex(): Done. {} objects reindexed.", reindexedCount);
 		} catch (Exception e) {
 			logger.warn(null, e);
 			return false;
