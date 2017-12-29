@@ -97,7 +97,7 @@ public class ElasticSearch implements Search {
 				if (app != null) {
 					String appid = app.getAppIdentifier();
 					if (app.isSharingIndex()) {
-						ElasticSearchUtils.addIndexAlias(Config.getRootAppIdentifier(), appid);
+						ElasticSearchUtils.addIndexAliasWithRouting(Config.getRootAppIdentifier(), appid);
 					} else {
 						int	shards = app.isRootApp() ? Config.getConfigInt("es.shards", 5) :
 								Config.getConfigInt("es.shards_for_child_apps", 2);

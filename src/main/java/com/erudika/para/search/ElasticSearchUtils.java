@@ -17,6 +17,7 @@
  */
 package com.erudika.para.search;
 
+import com.erudika.para.core.App;
 import com.erudika.para.core.ParaObject;
 import com.erudika.para.core.utils.ParaObjectUtils;
 import com.erudika.para.persistence.DAO;
@@ -221,7 +222,8 @@ public final class ElasticSearchUtils {
 		String indexName = appid.trim() + "_1";
 		boolean created = createIndexWithoutAlias(indexName, shards, replicas);
 		if (created) {
-			boolean aliased = addIndexAlias(indexName, appid);
+			boolean withAliasRouting = App.isRoot(appid) && Config.getConfigBoolean("root_index_sharing_enabled", false);
+			boolean aliased = addIndexAlias(indexName, appid, withAliasRouting);
 			if (!aliased) {
 				logger.info("Created ES index '{}' without an alias '{}'.", indexName, appid);
 			} else {
@@ -403,21 +405,38 @@ public final class ElasticSearchUtils {
 	}
 
 	/**
-	 * Adds a new alias to an existing index.
+	 * Adds a new alias to an existing index with routing and filtering by appid.
 	 * @param indexName the index name
 	 * @param aliasName the alias
 	 * @return true if acknowledged
 	 */
-	public static boolean addIndexAlias(String indexName, String aliasName) {
+	public static boolean addIndexAliasWithRouting(String indexName, String aliasName) {
+		return addIndexAlias(indexName, aliasName, true);
+	}
+
+	/**
+	 * Adds a new alias to an existing index.
+	 * @param indexName the index name
+	 * @param aliasName the alias
+	 * @param withAliasRouting enables alias routing for index with filtering by appid
+	 * @return true if acknowledged
+	 */
+	public static boolean addIndexAlias(String indexName, String aliasName, boolean withAliasRouting) {
 		if (StringUtils.isBlank(aliasName) || !existsIndex(indexName)) {
 			return false;
 		}
 		try {
 			String alias = aliasName.trim();
 			String index = getIndexNameWithWildcard(indexName.trim());
-			return getClient().admin().indices().prepareAliases().addAliasAction(AliasActions.add().
-					index(index).alias(alias).searchRouting(alias).indexRouting(alias).
-					filter(QueryBuilders.termQuery(Config._APPID, aliasName))).// DO NOT trim filter query!
+			AliasActions aliasBuilder;
+			if (withAliasRouting) {
+				aliasBuilder = AliasActions.add().index(index).alias(alias).
+						searchRouting(alias).indexRouting(alias).
+						filter(QueryBuilders.termQuery(Config._APPID, aliasName)); // DO NOT trim filter query!
+			} else {
+				aliasBuilder = AliasActions.add().index(index).alias(alias);
+			}
+			return getClient().admin().indices().prepareAliases().addAliasAction(aliasBuilder).
 					execute().actionGet().isAcknowledged();
 		} catch (Exception e) {
 			logger.error(null, e);
