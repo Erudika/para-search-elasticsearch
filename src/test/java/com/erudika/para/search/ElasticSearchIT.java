@@ -19,7 +19,7 @@ package com.erudika.para.search;
 
 import com.erudika.para.core.App;
 import com.erudika.para.core.ParaObject;
-import com.erudika.para.core.Tag;
+import com.erudika.para.core.Sysprop;
 import static com.erudika.para.search.SearchTest.u;
 import com.erudika.para.utils.Config;
 import java.util.Arrays;
@@ -43,12 +43,12 @@ public class ElasticSearchIT extends SearchTest {
 		System.setProperty("para.app_name", "para-test");
 		System.setProperty("para.cluster_name", "test");
 		System.setProperty("para.es.shards", "2");
+		System.setProperty("para.es.root_index_sharing_enabled", "true");
 		s = new ElasticSearch();
 		ElasticSearchUtils.createIndex(Config.getRootAppIdentifier());
 		ElasticSearchUtils.createIndex(appid1);
 		ElasticSearchUtils.createIndex(appid2);
 		ElasticSearchUtils.createIndex(appid3);
-		ElasticSearchUtils.createIndex("root-index");
 		SearchTest.init();
 	}
 
@@ -58,7 +58,6 @@ public class ElasticSearchIT extends SearchTest {
 		ElasticSearchUtils.deleteIndex(appid1);
 		ElasticSearchUtils.deleteIndex(appid2);
 		ElasticSearchUtils.deleteIndex(appid3);
-		ElasticSearchUtils.deleteIndex("root-index");
 		ElasticSearchUtils.shutdownClient();
 		SearchTest.cleanup();
 	}
@@ -125,19 +124,23 @@ public class ElasticSearchIT extends SearchTest {
 	public void testSharedIndex() throws InterruptedException {
 		String app1 = "myapp1";
 		String app2 = " myapp2"; // IMPORTANT! See "para.prepend_shared_appids_with_space"
-		String root = "root-index";
+		String root = Config.getRootAppIdentifier();
+		String type = "cat";
 
 		App rootApp = new App("rootapp");
 		rootApp.setAppid(root);
 		s.index(root, rootApp);
 
-		assertTrue(ElasticSearchUtils.addIndexAlias(root, app1));
-		assertTrue(ElasticSearchUtils.addIndexAlias(root, app2));
+		assertTrue(ElasticSearchUtils.addIndexAliasWithRouting(root, app1));
+		assertTrue(ElasticSearchUtils.addIndexAliasWithRouting(root, app2));
 
-		Tag t1 = new Tag("t1");
-		Tag t2 = new Tag("t2");
-		Tag t3 = new Tag("t3");
+		Sysprop t1 = new Sysprop("t1");
+		Sysprop t2 = new Sysprop("t2");
+		Sysprop t3 = new Sysprop("t3");
 
+		t1.setType(type);
+		t2.setType(type);
+		t3.setType(type);
 		t1.setAppid(app1);
 		t2.setAppid(app2);
 		t3.setAppid(app1);
@@ -153,14 +156,14 @@ public class ElasticSearchIT extends SearchTest {
 
 		// top view of all docs in shared index
 		assertEquals(1, s.getCount(root, "app").intValue());
-		assertEquals(0, s.getCount(root, "tag").intValue());
+		assertEquals(3, s.getCount(root, type).intValue());
 		// local view for each app space
-		assertEquals(2, s.getCount(app1, "tag").intValue());
-		assertEquals(1, s.getCount(app2, "tag").intValue());
+		assertEquals(2, s.getCount(app1, type).intValue());
+		assertEquals(1, s.getCount(app2, type).intValue());
 
-		List<Tag> l1 = s.findQuery(app1, "tag", "*");
+		List<Sysprop> l1 = s.findQuery(app1, type, "*");
 		assertEquals(2, l1.size());
-		List<Tag> l2 = s.findQuery(app2, "tag", "*");
+		List<Sysprop> l2 = s.findQuery(app2, type, "*");
 		assertEquals(l2.get(0), t2);
 
 		s.unindexAll(Arrays.asList(t1, t2, t3));

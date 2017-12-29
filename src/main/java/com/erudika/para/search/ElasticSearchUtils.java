@@ -222,7 +222,7 @@ public final class ElasticSearchUtils {
 		String indexName = appid.trim() + "_1";
 		boolean created = createIndexWithoutAlias(indexName, shards, replicas);
 		if (created) {
-			boolean withAliasRouting = App.isRoot(appid) && Config.getConfigBoolean("root_index_sharing_enabled", false);
+			boolean withAliasRouting = App.isRoot(appid) && Config.getConfigBoolean("es.root_index_sharing_enabled", false);
 			boolean aliased = addIndexAlias(indexName, appid, withAliasRouting);
 			if (!aliased) {
 				logger.info("Created ES index '{}' without an alias '{}'.", indexName, appid);

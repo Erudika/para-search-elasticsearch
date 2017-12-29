@@ -450,7 +450,7 @@ public abstract class SearchTest {
 		Thread.sleep(1000);
 
 		Pager p = new Pager(10);
-		p.setDesc(false);
+		p.setSortby("_docid");
 		List<ParaObject> page1 = s.findQuery(appid3, null, "*", p);
 		assertEquals(10, page1.size()); // page 1
 
