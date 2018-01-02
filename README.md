@@ -19,6 +19,7 @@ This plugin allows you to use Elasticsearch as the search engine for Para.
 
 - Implements `Search` interface using `TransportClient`
 - Implements `DAO` interface so you can use Elasticsearch as a database (avoid in production!)
+- Index sharing and multitenancy support through alias routing and filtering
 - Full pagination support for both "search-after" and "from-size" modes
 - Proxy endpoint `/v1/_elasticsearch` - relays all requests directly to Elasticsearch (disabled by default)
 
@@ -136,6 +137,15 @@ and returns a response indicating the number of reindexed objects and the elapse
    "tookMillis": 365
 }
 ```
+
+### Shared indices with alias routing
+
+The plugin also supports index sharing, whereby the root app index is shared with other apps which are created with the
+flag `app.isSharingIndex = true`. This feature is enabled with `para.es.root_index_sharing_enabled = true` and it is off
+by default. When the root index is created with sharing enabled, a special alias is created for it that contains a
+routing field which sends all documents of a child app to a particular shard, while providing total isolation between
+apps. This is useful when there are lots of smaller apps with just a few hundred documents each and we want to avoid the
+overhead of one index per app.
 
 ### Requirements
 
