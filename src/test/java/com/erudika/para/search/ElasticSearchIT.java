@@ -20,9 +20,12 @@ package com.erudika.para.search;
 import com.erudika.para.core.App;
 import com.erudika.para.core.ParaObject;
 import com.erudika.para.core.Sysprop;
+import static com.erudika.para.search.SearchTest.appid1;
 import static com.erudika.para.search.SearchTest.u;
 import com.erudika.para.utils.Config;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -169,5 +172,117 @@ public class ElasticSearchIT extends SearchTest {
 		s.unindexAll(Arrays.asList(t1, t2, t3));
 		ElasticSearchUtils.removeIndexAlias(root, app1);
 		ElasticSearchUtils.removeIndexAlias(root, app2);
+	}
+
+	@Test
+	public void testNestedIndexing() throws InterruptedException {
+		System.setProperty("para.es.use_nested_custom_fields", "true");
+		String indexInNestedMode = "app-nested-mode";
+		ElasticSearchUtils.createIndex(indexInNestedMode);
+		String type = "cat";
+		Sysprop c1 = new Sysprop("c1");
+		Sysprop c2 = new Sysprop("c2");
+		Sysprop c3 = new Sysprop("c3");
+
+		c1.setType(type);
+		c2.setType(type);
+		c3.setType(type);
+		c1.setName("Kitty 1");
+		c2.setName("Kitty 2");
+		c3.setName("Kitty 3");
+		c1.setAppid(indexInNestedMode);
+		c2.setAppid(indexInNestedMode);
+		c3.setAppid(indexInNestedMode);
+		c1.setTimestamp(12345678L);
+		c2.setTimestamp(123456789L);
+		c3.setTimestamp(1234567890L);
+
+		Map<String, Object> owner1 = new HashMap<>();
+		Map<String, Object> owner2 = new HashMap<>();
+		Map<String, Object> owner3 = new HashMap<>();
+		owner1.put("name", "Alice");
+		owner2.put("name", "Bob");
+		owner3.put("name", "Chris");
+		owner1.put("age", 33);
+		owner2.put("age", 34);
+		owner3.put("age", 35);
+
+		c1.addProperty("owner", owner1);
+		c2.addProperty("owner", owner2);
+		c3.addProperty("owner", owner3);
+
+		c1.addProperty("text", "This is a little test sentence. Testing, one, two, three.");
+		c2.addProperty("text", "We are testing this thing. This sentence is a test. One, two.");
+		c3.addProperty("text", "totally different text - kitty 3.");
+
+		s.index(indexInNestedMode, c1);
+		s.index(indexInNestedMode, c2);
+		s.index(indexInNestedMode, c3);
+
+		Thread.sleep(1000);
+
+		// findTermInList
+		ArrayList<String> terms1 = new ArrayList<String>();
+		terms1.add("alice");
+		terms1.add("bob");
+		List<ParaObject> r1 = s.findTermInList(indexInNestedMode, "cat", "properties.owner.name", terms1);
+		assertEquals(2, r1.size());
+		assertTrue(r1.stream().noneMatch((c) -> c.getId().equals("c3")));
+		assertTrue(s.findTermInList(indexInNestedMode, "cat", "properties.owner.name", Collections.singletonList("Bo")).isEmpty());
+
+		// findPrefix
+		List<ParaObject> r2 = s.findPrefix(indexInNestedMode, "cat", "properties.owner.name", "ali");
+		assertEquals(1, r2.size());
+		assertTrue(r2.get(0).getName().equals("Kitty 1"));
+		assertTrue(s.findPrefix(indexInNestedMode, "cat", "properties.owner.name", "Deb").isEmpty());
+
+		// findQuery
+		List<ParaObject> r31 = s.findQuery(indexInNestedMode, "cat", "\"Kitty 2\" AND properties.owner.age:34");
+		List<ParaObject> r32 = s.findQuery(indexInNestedMode, "cat", "timestamp:{12345678 TO *} AND properties.owner.age:{* TO 34]");
+		List<ParaObject> r33 = s.findQuery(indexInNestedMode, "cat", "-properties.owner.age:[* TO 33]");
+		List<ParaObject> r34 = s.findQuery(indexInNestedMode, "cat", "chris");
+		List<ParaObject> r35 = s.findQuery(indexInNestedMode, "cat", "properties.owner.age:*");
+		assertTrue(s.findQuery(indexInNestedMode, "cat", "dog AND properties.owner.age:34").isEmpty());
+		assertEquals(1, s.findQuery(indexInNestedMode, "cat", "dog OR properties.owner.age:34").size());
+		assertEquals(3, s.findQuery(indexInNestedMode, "cat", "properties.owner.name:[alice TO chris]").size());
+		assertEquals(2, s.findQuery(indexInNestedMode, "cat", "properties.owner.name:[alice TO chris}").size());
+		assertEquals(1, s.findQuery(indexInNestedMode, "cat", "properties.owner.name:{alice TO chris}").size());
+		assertEquals(1, r31.size());
+		assertEquals("c2", r31.get(0).getId());
+		assertEquals(1, r32.size());
+		assertEquals("c2", r32.get(0).getId());
+		assertEquals(2, r33.size());
+		assertTrue(r33.stream().allMatch((c) -> c.getId().equals("c2") || c.getId().equals("c3")));
+		assertEquals(1, r34.size());
+		assertEquals("c3", r34.get(0).getId());
+		assertEquals(3, r35.size());
+
+		// findWildcard
+		assertEquals(1, s.findWildcard(indexInNestedMode, "cat", "properties.owner.name", "ali*").size());
+		assertEquals(1, s.findWildcard(indexInNestedMode, "", "properties.owner.name", "chr*").size());
+		assertEquals(0, s.findWildcard(indexInNestedMode, "cat", "", "ali*").size());
+		assertEquals(2, s.findWildcard(indexInNestedMode, null, "properties.text", "test*").size());
+
+		// findTerms
+		Map<String, Object> terms = new HashMap<String, Object>();
+		terms.put("timestamp>", 12345678);
+		terms.put("properties.owner.age>=", 33);
+		assertEquals(2, s.findTerms(indexInNestedMode, "cat", terms, true).size());
+		assertEquals(3, s.findTerms(indexInNestedMode, "cat", terms, false).size());
+
+		// findSimilar
+		assertTrue(s.findSimilar(indexInNestedMode, "cat", "", null, null).isEmpty());
+		assertTrue(s.findSimilar(indexInNestedMode, "cat", "c3", new String[]{"properties.text"},
+				(String) c3.getProperty("text")).isEmpty());
+		assertTrue(s.findSimilar(indexInNestedMode, "cat", "", new String[0], "").isEmpty());
+		List<Sysprop> res = s.findSimilar(indexInNestedMode, "cat", "c1",
+				new String[]{"properties.text"}, (String) c2.getProperty("text"));
+		assertFalse(res.isEmpty());
+		assertEquals(c2, res.get(0));
+
+
+		s.unindexAll(indexInNestedMode, Arrays.asList(c1, c2, c3));
+		ElasticSearchUtils.deleteIndex(indexInNestedMode);
+		System.setProperty("para.es.use_nested_custom_fields", "false");
 	}
 }

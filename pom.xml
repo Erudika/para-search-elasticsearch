@@ -112,7 +112,7 @@
 			<plugin>
 				<groupId>com.github.alexcojocaru</groupId>
 				<artifactId>elasticsearch-maven-plugin</artifactId>
-				<version>5.11</version>
+				<version>6.2</version>
 				<configuration>
 					<skip>${skipITs}</skip>
 					<autoCreateIndex>false</autoCreateIndex>

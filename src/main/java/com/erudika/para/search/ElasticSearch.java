@@ -25,16 +25,25 @@ import com.erudika.para.core.ParaObject;
 import com.erudika.para.core.Tag;
 import com.erudika.para.core.utils.CoreUtils;
 import com.erudika.para.persistence.DAO;
+import static com.erudika.para.search.ElasticSearchUtils.PROPS_PREFIX;
+import static com.erudika.para.search.ElasticSearchUtils.PROPS_REGEX;
+import static com.erudika.para.search.ElasticSearchUtils.convertQueryStringToNestedQuery;
 import static com.erudika.para.search.ElasticSearchUtils.getIndexName;
+import static com.erudika.para.search.ElasticSearchUtils.getNestedKey;
 import static com.erudika.para.search.ElasticSearchUtils.getPager;
 import static com.erudika.para.search.ElasticSearchUtils.getTermsQuery;
 import static com.erudika.para.search.ElasticSearchUtils.getType;
+import static com.erudika.para.search.ElasticSearchUtils.getValueFieldName;
 import static com.erudika.para.search.ElasticSearchUtils.isAsyncEnabled;
+import static com.erudika.para.search.ElasticSearchUtils.keyValueBoolQuery;
+import static com.erudika.para.search.ElasticSearchUtils.nestedMode;
+import static com.erudika.para.search.ElasticSearchUtils.nestedPropsQuery;
 import static com.erudika.para.search.ElasticSearchUtils.qs;
 import com.erudika.para.utils.Config;
 import com.erudika.para.utils.Pager;
 import com.erudika.para.utils.Utils;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -65,7 +74,18 @@ import org.elasticsearch.index.IndexNotFoundException;
 import org.elasticsearch.index.query.BoolQueryBuilder;
 import org.elasticsearch.index.query.MoreLikeThisQueryBuilder.Item;
 import org.elasticsearch.index.query.QueryBuilder;
-import org.elasticsearch.index.query.QueryBuilders;
+import static org.elasticsearch.index.query.QueryBuilders.boolQuery;
+import static org.elasticsearch.index.query.QueryBuilders.geoDistanceQuery;
+import static org.elasticsearch.index.query.QueryBuilders.idsQuery;
+import static org.elasticsearch.index.query.QueryBuilders.matchAllQuery;
+import static org.elasticsearch.index.query.QueryBuilders.matchQuery;
+import static org.elasticsearch.index.query.QueryBuilders.moreLikeThisQuery;
+import static org.elasticsearch.index.query.QueryBuilders.nestedQuery;
+import static org.elasticsearch.index.query.QueryBuilders.prefixQuery;
+import static org.elasticsearch.index.query.QueryBuilders.queryStringQuery;
+import static org.elasticsearch.index.query.QueryBuilders.termQuery;
+import static org.elasticsearch.index.query.QueryBuilders.termsQuery;
+import static org.elasticsearch.index.query.QueryBuilders.wildcardQuery;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHits;
 import org.elasticsearch.search.sort.SortBuilder;
@@ -230,7 +250,7 @@ public class ElasticSearch implements Search {
 		}
 
 		QueryBuilder fb = (terms == null || terms.isEmpty()) ?
-				QueryBuilders.matchAllQuery() : getTermsQuery(terms, matchAll);
+				matchAllQuery() : getTermsQuery(terms, matchAll);
 		SearchResponse scrollResp = client().prepareSearch(getIndexName(appid))
 				.setScroll(new TimeValue(60000))
 				.setQuery(fb)
@@ -279,7 +299,7 @@ public class ElasticSearch implements Search {
 			return list;
 		}
 		try {
-			QueryBuilder qb = QueryBuilders.termsQuery(Config._ID, ids);
+			QueryBuilder qb = termsQuery(Config._ID, ids);
 			return searchQuery(appid, null, qb);
 		} catch (Exception e) {
 			logger.warn(null, e);
@@ -293,7 +313,18 @@ public class ElasticSearch implements Search {
 		if (StringUtils.isBlank(field) || terms == null) {
 			return Collections.emptyList();
 		}
-		QueryBuilder qb = QueryBuilders.termsQuery(field, terms);
+		QueryBuilder qb;
+		if (nestedMode() && field.startsWith(PROPS_PREFIX)) {
+			QueryBuilder bfb = null;
+			BoolQueryBuilder fb = boolQuery();
+			for (Object term : terms) {
+				bfb = keyValueBoolQuery(field, String.valueOf(term));
+				fb.should(bfb);
+			}
+			qb = nestedPropsQuery(terms.size() > 1 ? fb : bfb);
+		} else {
+			qb = termsQuery(field, terms);
+		}
 		return searchQuery(appid, type, qb, pager);
 	}
 
@@ -303,7 +334,13 @@ public class ElasticSearch implements Search {
 		if (StringUtils.isBlank(field) || StringUtils.isBlank(prefix)) {
 			return Collections.emptyList();
 		}
-		return searchQuery(appid, type, QueryBuilders.prefixQuery(field, prefix), pager);
+		QueryBuilder qb;
+		if (nestedMode() && field.startsWith(PROPS_PREFIX)) {
+			qb = nestedPropsQuery(keyValueBoolQuery(field, prefixQuery(getValueFieldName(prefix), prefix)));
+		} else {
+			qb = prefixQuery(field, prefix);
+		}
+		return searchQuery(appid, type, qb, pager);
 	}
 
 	@Override
@@ -312,7 +349,14 @@ public class ElasticSearch implements Search {
 		if (StringUtils.isBlank(query)) {
 			return Collections.emptyList();
 		}
-		QueryBuilder qb = QueryBuilders.queryStringQuery(qs(query)).allowLeadingWildcard(false);
+		// a basic implementation of support for nested queries in query string
+		// https://github.com/elastic/elasticsearch/issues/11322
+		QueryBuilder qb;
+		if (nestedMode() && query.matches(PROPS_REGEX)) {
+			qb = convertQueryStringToNestedQuery(query);
+		} else {
+			qb = queryStringQuery(qs(query)).allowLeadingWildcard(false);
+		}
 		return searchQuery(appid, type, qb, pager);
 	}
 
@@ -323,7 +367,7 @@ public class ElasticSearch implements Search {
 			return Collections.emptyList();
 		}
 		String queryString = "nstd." + field + ":" + query;
-		QueryBuilder qb = QueryBuilders.nestedQuery("nstd", QueryBuilders.queryStringQuery(qs(queryString)), Avg);
+		QueryBuilder qb = nestedQuery("nstd", queryStringQuery(qs(queryString)), Avg);
 		return searchQuery(appid, type, qb, pager);
 	}
 
@@ -333,7 +377,12 @@ public class ElasticSearch implements Search {
 		if (StringUtils.isBlank(field) || StringUtils.isBlank(wildcard)) {
 			return Collections.emptyList();
 		}
-		QueryBuilder qb = QueryBuilders.wildcardQuery(field, wildcard);
+		QueryBuilder qb;
+		if (nestedMode() && field.startsWith(PROPS_PREFIX)) {
+			qb = nestedPropsQuery(keyValueBoolQuery(field, wildcardQuery(getValueFieldName(wildcard), wildcard)));
+		} else {
+			qb = wildcardQuery(field, wildcard);
+		}
 		return searchQuery(appid, type, qb, pager);
 	}
 
@@ -344,10 +393,10 @@ public class ElasticSearch implements Search {
 			return Collections.emptyList();
 		}
 
-		BoolQueryBuilder tagFilter = QueryBuilders.boolQuery();
+		BoolQueryBuilder tagFilter = boolQuery();
 		//assuming clean & safe tags here
 		for (String tag : tags) {
-			tagFilter.must(QueryBuilders.termQuery(Config._TAGS, tag));
+			tagFilter.must(termQuery(Config._TAGS, tag));
 		}
 		// The filter looks like this: ("tag1" OR "tag2" OR "tag3") AND "type"
 		return searchQuery(appid, type, tagFilter, pager);
@@ -379,14 +428,26 @@ public class ElasticSearch implements Search {
 		QueryBuilder qb;
 
 		if (fields == null || fields.length == 0) {
-			qb = QueryBuilders.moreLikeThisQuery(new String[]{liketext}).minDocFreq(1).minTermFreq(1);
+			qb = moreLikeThisQuery(new String[]{liketext}).minDocFreq(1).minTermFreq(1);
 		} else {
-			qb = QueryBuilders.moreLikeThisQuery(fields, new String[]{liketext}, Item.EMPTY_ARRAY).
-					minDocFreq(1).minTermFreq(1);
+			boolean containsNestedProps = Arrays.stream(fields).anyMatch((f) -> StringUtils.startsWith(f, PROPS_PREFIX));
+			if (nestedMode() && containsNestedProps) {
+				BoolQueryBuilder bqb = boolQuery();
+				for (String field : fields) {
+					QueryBuilder kQuery = matchQuery(PROPS_PREFIX + "k", getNestedKey(field));
+					QueryBuilder vQuery = moreLikeThisQuery(new String[]{PROPS_PREFIX + "v"},
+							new String[]{liketext}, Item.EMPTY_ARRAY).minDocFreq(1).minTermFreq(1);
+					bqb.should(nestedPropsQuery(boolQuery().must(kQuery).must(vQuery)));
+				}
+				qb = bqb;
+			} else {
+				qb = moreLikeThisQuery(fields, new String[]{liketext}, Item.EMPTY_ARRAY).
+						minDocFreq(1).minTermFreq(1);
+			}
 		}
 
 		if (!StringUtils.isBlank(filterKey)) {
-			qb = QueryBuilders.boolQuery().mustNot(QueryBuilders.termQuery(Config._ID, filterKey)).filter(qb);
+			qb = boolQuery().mustNot(termQuery(Config._ID, filterKey)).filter(qb);
 		}
 		return searchQuery(appid, searchQueryRaw(appid, type, qb, pager));
 	}
@@ -396,7 +457,7 @@ public class ElasticSearch implements Search {
 		if (StringUtils.isBlank(keyword)) {
 			return Collections.emptyList();
 		}
-		QueryBuilder qb = QueryBuilders.wildcardQuery("tag", keyword.concat("*"));
+		QueryBuilder qb = wildcardQuery("tag", keyword.concat("*"));
 		return searchQuery(appid, Utils.type(Tag.class), qb, pager);
 	}
 
@@ -410,11 +471,9 @@ public class ElasticSearch implements Search {
 		if (StringUtils.isBlank(query)) {
 			query = "*";
 		}
-		Pager page = getPager(pager);
 		// find nearby Address objects
-		QueryBuilder qb1 = QueryBuilders.geoDistanceQuery("latlng").point(lat, lng).
-				distance(radius, DistanceUnit.KILOMETERS);
-
+		Pager page = getPager(pager);
+		QueryBuilder qb1 = geoDistanceQuery("latlng").point(lat, lng).distance(radius, DistanceUnit.KILOMETERS);
 		SearchHits hits1 = searchQueryRaw(appid, Utils.type(Address.class), qb1, page);
 		page.setLastKey(null); // will cause problems if not cleared
 
@@ -435,12 +494,8 @@ public class ElasticSearch implements Search {
 			}
 		}
 
-		QueryBuilder qb2 = QueryBuilders.boolQuery().
-				must(QueryBuilders.queryStringQuery(qs(query))).
-				filter(QueryBuilders.idsQuery().addIds(parentids));
-
+		QueryBuilder qb2 = boolQuery().must(queryStringQuery(qs(query))).filter(idsQuery().addIds(parentids));
 		SearchHits hits2 = searchQueryRaw(appid, type, qb2, page);
-
 		return searchQuery(appid, hits2);
 	}
 
@@ -524,10 +579,10 @@ public class ElasticSearch implements Search {
 		int start = (pageNum < 1 || pageNum > Config.MAX_PAGES) ? 0 : (pageNum - 1) * max;
 
 		if (query == null) {
-			query = QueryBuilders.matchAllQuery();
+			query = matchAllQuery();
 		}
 		if (!StringUtils.isBlank(type)) {
-			query = QueryBuilders.boolQuery().must(query).must(QueryBuilders.termQuery(Config._TYPE, type));
+			query = boolQuery().must(query).must(termQuery(Config._TYPE, type));
 		}
 
 		SearchHits hits = null;
@@ -604,9 +659,9 @@ public class ElasticSearch implements Search {
 		}
 		QueryBuilder query;
 		if (!StringUtils.isBlank(type)) {
-			query = QueryBuilders.termQuery(Config._TYPE, type);
+			query = termQuery(Config._TYPE, type);
 		} else {
-			query = QueryBuilders.matchAllQuery();
+			query = matchAllQuery();
 		}
 		Long count = 0L;
 		try {
@@ -629,7 +684,7 @@ public class ElasticSearch implements Search {
 		QueryBuilder query = getTermsQuery(terms, true);
 		if (query != null) {
 			if (!StringUtils.isBlank(type)) {
-				query = QueryBuilders.boolQuery().must(query).must(QueryBuilders.termQuery(Config._TYPE, type));
+				query = boolQuery().must(query).must(termQuery(Config._TYPE, type));
 			}
 			try {
 				SearchRequestBuilder crb = client().prepareSearch(getIndexName(appid)).setSize(0).setQuery(query);

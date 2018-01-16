@@ -19,6 +19,7 @@ package com.erudika.para.search;
 
 import com.erudika.para.core.App;
 import com.erudika.para.core.ParaObject;
+import com.erudika.para.core.Sysprop;
 import com.erudika.para.core.utils.ParaObjectUtils;
 import com.erudika.para.persistence.DAO;
 import com.erudika.para.utils.Config;
@@ -29,13 +30,26 @@ import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.math.NumberUtils;
+import org.apache.lucene.index.Term;
 import org.apache.lucene.queryparser.flexible.standard.StandardQueryParser;
+import org.apache.lucene.search.BooleanClause;
+import org.apache.lucene.search.BooleanQuery;
+import org.apache.lucene.search.BoostQuery;
+import org.apache.lucene.search.FuzzyQuery;
+import org.apache.lucene.search.PrefixQuery;
+import org.apache.lucene.search.Query;
+import org.apache.lucene.search.TermQuery;
+import org.apache.lucene.search.TermRangeQuery;
+import org.apache.lucene.search.WildcardQuery;
+import static org.apache.lucene.search.join.ScoreMode.Avg;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.DocWriteResponse;
 import org.elasticsearch.action.admin.cluster.node.info.NodeInfo;
@@ -53,8 +67,18 @@ import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.transport.TransportAddress;
 import org.elasticsearch.common.xcontent.XContentType;
 import org.elasticsearch.index.query.BoolQueryBuilder;
+import org.elasticsearch.index.query.NestedQueryBuilder;
 import org.elasticsearch.index.query.QueryBuilder;
-import org.elasticsearch.index.query.QueryBuilders;
+import static org.elasticsearch.index.query.QueryBuilders.boolQuery;
+import static org.elasticsearch.index.query.QueryBuilders.fuzzyQuery;
+import static org.elasticsearch.index.query.QueryBuilders.matchAllQuery;
+import static org.elasticsearch.index.query.QueryBuilders.matchQuery;
+import static org.elasticsearch.index.query.QueryBuilders.multiMatchQuery;
+import static org.elasticsearch.index.query.QueryBuilders.nestedQuery;
+import static org.elasticsearch.index.query.QueryBuilders.prefixQuery;
+import static org.elasticsearch.index.query.QueryBuilders.rangeQuery;
+import static org.elasticsearch.index.query.QueryBuilders.termQuery;
+import static org.elasticsearch.index.query.QueryBuilders.wildcardQuery;
 import org.elasticsearch.index.query.RangeQueryBuilder;
 import org.elasticsearch.search.sort.SortBuilder;
 import org.elasticsearch.search.sort.SortBuilders;
@@ -73,14 +97,34 @@ public final class ElasticSearchUtils {
 	private static TransportClient searchClient;
 	private static final String DATE_FORMAT = "epoch_millis||epoch_second||yyyy-MM-dd HH:mm:ss||"
 			+ "yyyy-MM-dd||yyyy/MM/dd||yyyyMMdd||yyyy";
+
+	static final String PROPS_FIELD = "properties";
+	static final String PROPS_PREFIX = PROPS_FIELD + ".";
+	static final String PROPS_JSON = "_" + PROPS_FIELD;
+	static final String PROPS_REGEX = "(^|.*\\W)" + PROPS_FIELD + "[\\.\\:].+";
+
+	/**
+	 * Switches between normal indexing and indexing with nested key/value objects for Sysprop.properties.
+	 * When this is 'false' (normal mode), Para objects will be indexed without modification but this could lead to
+	 * a field mapping explosion and crash the ES cluster.
+	 *
+	 * When set to 'true' (nested mode), Para objects will be indexed with all custom fields flattened to an array of
+	 * key/value properties: properties: [{"k": "field", "v": "value"},...]. This is done for Sysprop objects with
+	 * containing custom properties. This mode prevents an eventual field mapping explosion.
+	 */
+	static boolean nestedMode() {
+		return Config.getConfigBoolean("es.use_nested_custom_fields", false);
+	}
+
 	/**
 	 * A list of default mappings that are defined upon index creation.
 	 */
-	private static final String DEFAULT_MAPPING =
-			"{\n" +
+	private static String getDefaultMapping() {
+		return "{\n" +
 			"  \"_default_\": {\n" +
 			"    \"properties\": {\n" +
 			"      \"nstd\": {\"type\": \"nested\"},\n" +
+			"      \"properties\": {\"type\": \"" + (nestedMode() ? "nested" : "object") + "\"},\n" +
 			"      \"latlng\": {\"type\": \"geo_point\"},\n" +
 			"      \"_docid\": {\"type\": \"long\", \"index\": false},\n" +
 			"      \"updated\": {\"type\": \"date\", \"format\" : \"" + DATE_FORMAT + "\"},\n" +
@@ -103,6 +147,19 @@ public final class ElasticSearchUtils {
 			"    }\n" +
 			"  }\n" +
 			"}";
+	}
+
+	/**
+	 * These fields are not indexed.
+	 */
+	private static final String[] IGNORED_FIELDS = new String[] {
+		"settings", // App
+		"datatypes", // App
+		"deviceState", // Thing
+		"deviceMetadata", // Thing
+		"resourcePermissions", // App
+		"validationConstraints" // App
+	};
 
 	private ElasticSearchUtils() { }
 
@@ -189,7 +246,7 @@ public final class ElasticSearchUtils {
 					setSettings(settings.build());
 
 			// default system mapping (all the rest are dynamic)
-			create.addMapping("_default_", DEFAULT_MAPPING, XContentType.JSON);
+			create.addMapping("_default_", getDefaultMapping(), XContentType.JSON);
 			create.execute().actionGet();
 			logger.info("Created a new index '{}' with {} shards, {} replicas.", name, shards, replicas);
 		} catch (Exception e) {
@@ -432,7 +489,7 @@ public final class ElasticSearchUtils {
 			if (withAliasRouting) {
 				aliasBuilder = AliasActions.add().index(index).alias(alias).
 						searchRouting(alias).indexRouting(alias).
-						filter(QueryBuilders.termQuery(Config._APPID, aliasName)); // DO NOT trim filter query!
+						filter(termQuery(Config._APPID, aliasName)); // DO NOT trim filter query!
 			} else {
 				aliasBuilder = AliasActions.add().index(index).alias(alias);
 			}
@@ -598,7 +655,7 @@ public final class ElasticSearchUtils {
 	 * @return the filter
 	 */
 	static QueryBuilder getTermsQuery(Map<String, ?> terms, boolean mustMatchAll) {
-		BoolQueryBuilder fb = QueryBuilders.boolQuery();
+		BoolQueryBuilder fb = boolQuery();
 		int addedTerms = 0;
 		boolean noop = true;
 		QueryBuilder bfb = null;
@@ -611,18 +668,13 @@ public final class ElasticSearchUtils {
 					continue;
 				}
 				Matcher matcher = Pattern.compile(".*(<|>|<=|>=)$").matcher(term.getKey().trim());
-				bfb = QueryBuilders.termQuery(term.getKey(), stringValue);
 				if (matcher.matches()) {
-					String key = term.getKey().replaceAll("[<>=\\s]+$", "");
-					RangeQueryBuilder rfb = QueryBuilders.rangeQuery(key);
-					if (">".equals(matcher.group(1))) {
-						bfb = rfb.gt(stringValue);
-					} else if ("<".equals(matcher.group(1))) {
-						bfb = rfb.lt(stringValue);
-					} else if (">=".equals(matcher.group(1))) {
-						bfb = rfb.gte(stringValue);
-					} else if ("<=".equals(matcher.group(1))) {
-						bfb = rfb.lte(stringValue);
+					bfb = range(matcher.group(1), term.getKey(), stringValue);
+				} else {
+					if (nestedMode() && term.getKey().startsWith(PROPS_PREFIX)) {
+						bfb = nestedPropsQuery(keyValueBoolQuery(term.getKey(), stringValue));
+					} else {
+						bfb = termQuery(term.getKey(), stringValue);
 					}
 				}
 				if (mustMatchAll) {
@@ -664,11 +716,26 @@ public final class ElasticSearchUtils {
 		return query.trim();
 	}
 
+	static Query qsParsed(String query) {
+		if (StringUtils.isBlank(query) || "*".equals(query.trim())) {
+			return null;
+		}
+		try {
+			StandardQueryParser parser = new StandardQueryParser();
+			parser.setAllowLeadingWildcard(false);
+			return parser.parse(query, "");
+		} catch (Exception ex) {
+			logger.warn("Failed to parse query string '{}'.", query);
+		}
+		return null;
+	}
+
 	/**
 	 * Converts a {@link ParaObject} to a map of fields and values.
 	 * @param po an object
 	 * @return a map of keys and values
 	 */
+	@SuppressWarnings("unchecked")
 	static Map<String, Object> getSourceFromParaObject(ParaObject po) {
 		if (po == null) {
 			return Collections.emptyMap();
@@ -676,9 +743,68 @@ public final class ElasticSearchUtils {
 		Map<String, Object> data = ParaObjectUtils.getAnnotatedFields(po, null, false);
 		Map<String, Object> source = new HashMap<>(data.size() + 1);
 		source.putAll(data);
+		if (nestedMode() && po instanceof Sysprop) {
+			try {
+				List<Map<String, Object>> keysAndValues = new LinkedList<>();
+				Map<String, Object> props = (Map<String, Object>) data.get(PROPS_FIELD);
+				// flatten properites object to array of keys/values, to prevent field mapping explosion
+				addFieldsToSource(props, keysAndValues, "");
+				source.put(PROPS_FIELD, keysAndValues); // overwrite properties object with flattened array
+				// special field for holding the original sysprop.properties map as JSON string
+				source.put(PROPS_JSON, ParaObjectUtils.getJsonWriterNoIdent().writeValueAsString(props));
+			} catch (Exception e) {
+				logger.error(null, e);
+			}
+		}
+		for (String field : IGNORED_FIELDS) {
+			source.remove(field);
+		}
 		// special DOC ID field used in "search after"
 		source.put("_docid", NumberUtils.toLong(Utils.getNewId()));
 		return source;
+	}
+
+	/**
+	 * Flattens a complex object like a property Map ({@code Sysprop.getProperties()}) to a list of key/value pairs.
+	 * Rearranges properites to prevent field mapping explosion, for example:
+	 * properties: [{k: key1, v: value1}, {k: key2, v: value2}...]
+	 * @param objectData original object properties
+	 * @param keysAndValues a list of key/value objects, each containing one property
+	 * @param fieldPrefix a field prefix, e.g. "properties.key"
+	 */
+	@SuppressWarnings("unchecked")
+	private static void addFieldsToSource(Map<String, Object> objectData, List<Map<String, Object>> keysAndValues,
+			String fieldPrefix) {
+		if (objectData == null || keysAndValues == null) {
+			return;
+		}
+		for (Entry<String, Object> entry : objectData.entrySet()) {
+			String pre = (StringUtils.isBlank(fieldPrefix) ? "" : fieldPrefix + "-");
+			String field = pre + entry.getKey();
+			Object value = entry.getValue();
+			if (value != null) {
+				Map<String, Object> propMap = new HashMap<String, Object>(2);
+				propMap.put("k", field);
+				if (value instanceof Map) {
+					// recursively flatten all nested objects
+					addFieldsToSource((Map<String, Object>) value, keysAndValues, pre + field);
+				} else if (value instanceof List) {
+					// input array: key: [value1, value2]
+					// flattened array: [{k: key.0, v: value1}, {k: key.1, v: value2}]
+					for (int i = 0; i < ((List) value).size(); i++) {
+						Object val = ((List) value).get(i);
+						addFieldsToSource(Collections.singletonMap(String.valueOf(i), val), keysAndValues, pre + field);
+					}
+				} else if (value instanceof Number) {
+					propMap.put("vn", value);
+					keysAndValues.add(propMap);
+				} else {
+					// boolean and Date data types are ommited for simplicity
+					propMap.put("v", String.valueOf(value));
+					keysAndValues.add(propMap);
+				}
+			}
+		}
 	}
 
 	/**
@@ -693,8 +819,262 @@ public final class ElasticSearchUtils {
 		}
 		Map<String, Object> data = new HashMap<>(source.size());
 		data.putAll(source);
+		// retrieve the JSON for the original properties field and deserialize it
+		if (nestedMode() && data.containsKey(PROPS_JSON)) {
+			try {
+				Map<String, Object> props = ParaObjectUtils.getJsonReader(Map.class).
+						readValue((String) data.get(PROPS_JSON));
+				data.put(PROPS_FIELD, props);
+			} catch (Exception e) {
+				logger.error(null, e);
+			}
+			data.remove(PROPS_JSON);
+		}
 		data.remove("_docid");
 		return ParaObjectUtils.setAnnotatedFields(data);
+	}
+
+	/**
+	 * @param operator operator <,>,<=,>=
+	 * @param field field name
+	 * @param stringValue field value
+	 * @return a range query
+	 */
+	static QueryBuilder range(String operator, String field, String stringValue) {
+		String key = StringUtils.replaceAll(field, "[<>=\\s]+$", "");
+		boolean nestedMode = nestedMode() && field.startsWith(PROPS_PREFIX);
+		RangeQueryBuilder rfb = rangeQuery(nestedMode ? getValueFieldName(stringValue) : key);
+		if (">".equals(operator)) {
+			rfb.gt(getNumericValue(stringValue));
+		} else if ("<".equals(operator)) {
+			rfb.lt(getNumericValue(stringValue));
+		} else if (">=".equals(operator)) {
+			rfb.gte(getNumericValue(stringValue));
+		} else if ("<=".equals(operator)) {
+			rfb.lte(getNumericValue(stringValue));
+		}
+		if (nestedMode) {
+			return nestedPropsQuery(keyValueBoolQuery(key, stringValue, rfb));
+		} else {
+			return rfb;
+		}
+	}
+
+	/**
+	 * @param query query string
+	 * @return a list of composite queries for matching nested objects
+	 */
+	static QueryBuilder convertQueryStringToNestedQuery(String query) {
+		Query q = qsParsed(StringUtils.trimToEmpty(query));
+		if (q == null) {
+			return matchAllQuery();
+		}
+		return rewriteQuery(q);
+	}
+
+	/**
+	 * @param q parsed Lucene query string query
+	 * @return a rewritten query with nested queries for custom properties (when in nested mode)
+	 */
+	private static QueryBuilder rewriteQuery(Query q) {
+		QueryBuilder qb = null;
+		if (q instanceof BooleanQuery) {
+			qb = boolQuery();
+			for (BooleanClause clause : ((BooleanQuery) q).clauses()) {
+				switch (clause.getOccur()) {
+					case MUST:
+						((BoolQueryBuilder) qb).must(rewriteQuery(clause.getQuery()));
+						break;
+					case MUST_NOT:
+						((BoolQueryBuilder) qb).mustNot(rewriteQuery(clause.getQuery()));
+						break;
+					case FILTER:
+						((BoolQueryBuilder) qb).filter(rewriteQuery(clause.getQuery()));
+						break;
+					case SHOULD:
+					default:
+						((BoolQueryBuilder) qb).should(rewriteQuery(clause.getQuery()));
+				}
+			}
+		} else if (q instanceof TermRangeQuery) {
+			qb = termRange(q);
+		} else if (q instanceof BoostQuery) {
+			qb = rewriteQuery(((BoostQuery) q).getQuery()).boost(((BoostQuery) q).getBoost());
+		} else if (q instanceof TermQuery) {
+			qb = term(q);
+		} else if (q instanceof FuzzyQuery) {
+			qb = fuzzy(q);
+		} else if (q instanceof PrefixQuery) {
+			qb = prefix(q);
+		} else if (q instanceof WildcardQuery) {
+			qb = wildcard(q);
+		} else {
+			logger.warn("Unknown query type in nested mode query syntax: {}", q.getClass());
+		}
+		return (qb == null) ? matchAllQuery() : qb;
+	}
+
+	private static QueryBuilder termRange(Query q) {
+		QueryBuilder qb = null;
+		TermRangeQuery trq = (TermRangeQuery) q;
+		if (!StringUtils.isBlank(trq.getField())) {
+			String from = trq.getLowerTerm() != null ? Term.toString(trq.getLowerTerm()) : "*";
+			String to = trq.getUpperTerm() != null ? Term.toString(trq.getUpperTerm()) : "*";
+			boolean nestedMode = nestedMode() && trq.getField().matches(PROPS_REGEX);
+			qb = rangeQuery(nestedMode ? getValueFieldNameFromRange(from, to) : trq.getField());
+			if ("*".equals(from) && "*".equals(to)) {
+				qb = matchAllQuery();
+			}
+			if (!"*".equals(from)) {
+				((RangeQueryBuilder) qb).from(getNumericValue(from)).includeLower(trq.includesLower());
+			}
+			if (!"*".equals(to)) {
+				((RangeQueryBuilder) qb).to(getNumericValue(to)).includeUpper(trq.includesUpper());
+			}
+			if (nestedMode) {
+				qb = nestedPropsQuery(keyValueBoolQuery(trq.getField(), qb));
+			}
+		}
+		return qb;
+	}
+
+	private static QueryBuilder term(Query q) {
+		QueryBuilder qb;
+		String field = ((TermQuery) q).getTerm().field();
+		String value = ((TermQuery) q).getTerm().text();
+		if (StringUtils.isBlank(field)) {
+			qb = multiMatchQuery(value);
+		} else if (nestedMode() && field.matches(PROPS_REGEX)) {
+			qb = nestedPropsQuery(keyValueBoolQuery(field, value));
+		} else {
+			qb = termQuery(field, value);
+		}
+		return qb;
+	}
+
+	private static QueryBuilder fuzzy(Query q) {
+		QueryBuilder qb;
+		String field = ((FuzzyQuery) q).getTerm().field();
+		String value = ((FuzzyQuery) q).getTerm().text();
+		if (StringUtils.isBlank(field)) {
+			qb = multiMatchQuery(value);
+		} else if (nestedMode() && field.matches(PROPS_REGEX)) {
+			qb = nestedPropsQuery(keyValueBoolQuery(field, fuzzyQuery(getValueFieldName(value), value)));
+		} else {
+			qb = fuzzyQuery(field, value);
+		}
+		return qb;
+	}
+
+	private static QueryBuilder prefix(Query q) {
+		QueryBuilder qb;
+		String field = ((PrefixQuery) q).getPrefix().field();
+		String value = ((PrefixQuery) q).getPrefix().text();
+		if (StringUtils.isBlank(field)) {
+			qb = multiMatchQuery(value);
+		} else if (nestedMode() && field.matches(PROPS_REGEX)) {
+			qb = nestedPropsQuery(keyValueBoolQuery(field, prefixQuery(getValueFieldName(value), value)));
+		} else {
+			qb = prefixQuery(field, value);
+		}
+		return qb;
+	}
+
+	private static QueryBuilder wildcard(Query q) {
+		QueryBuilder qb;
+		String field = ((WildcardQuery) q).getTerm().field();
+		String value = ((WildcardQuery) q).getTerm().text();
+		if (StringUtils.isBlank(field)) {
+			qb = multiMatchQuery(value);
+		} else if (nestedMode() && field.matches(PROPS_REGEX)) {
+			qb = nestedPropsQuery(keyValueBoolQuery(field, wildcardQuery(getValueFieldName(value), value)));
+		} else {
+			qb = wildcardQuery(field, value);
+		}
+		return qb;
+	}
+
+	/**
+	 * @param k field name
+	 * @param query query object
+	 * @return a composite query: bool(match(key) AND match(value))
+	 */
+	static QueryBuilder keyValueBoolQuery(String k, QueryBuilder query) {
+		return keyValueBoolQuery(k, null, query);
+	}
+
+	/**
+	 * @param k field name
+	 * @param v field value
+	 * @return a composite query: bool(match(key) AND match(value))
+	 */
+	static QueryBuilder keyValueBoolQuery(String k, String v) {
+		return keyValueBoolQuery(k, v, null);
+	}
+
+	/**
+	 * @param k field name
+	 * @param v field value
+	 * @param query query object
+	 * @return a composite query: bool(match(key) AND match(value))
+	 */
+	static QueryBuilder keyValueBoolQuery(String k, String v, QueryBuilder query) {
+		if (StringUtils.isBlank(k) || (query == null && StringUtils.isBlank(v))) {
+			return matchAllQuery();
+		}
+		QueryBuilder kQuery = matchQuery(PROPS_PREFIX + "k", getNestedKey(k));
+		QueryBuilder vQuery = (query == null) ? matchQuery(getValueFieldName(v), v) : query;
+		if ("*".equals(v) || matchAllQuery().equals(query)) {
+			return boolQuery().must(kQuery);
+		}
+		return boolQuery().must(kQuery).must(vQuery);
+	}
+
+	/**
+	 * @param query query
+	 * @return a nested query
+	 */
+	static NestedQueryBuilder nestedPropsQuery(QueryBuilder query) {
+		return nestedQuery(PROPS_FIELD, query, Avg);
+	}
+
+	/**
+	 * @param key dotted field path
+	 * @return translate "properties.path.to.key" to "properties.path-to-key"
+	 */
+	static String getNestedKey(String key) {
+		if (StringUtils.startsWith(key, PROPS_PREFIX)) {
+			return StringUtils.removeStart(key, PROPS_PREFIX).replaceAll("\\.", "-");
+		}
+		return key;
+	}
+
+	/**
+	 * @param v search term
+	 * @return the name of the value property inside a nested object, e.g. "properties.v"
+	 */
+	static String getValueFieldName(String v) {
+		return PROPS_PREFIX + (NumberUtils.isDigits(v) ? "vn" : "v");
+	}
+
+	/**
+	 * @param from from value
+	 * @param to to value
+	 * @return either "properties.vn" if one of the range limits is a number, or "properties.v" otherwise.
+	 */
+	static String getValueFieldNameFromRange(String from, String to) {
+		if (("*".equals(from) && "*".equals(to)) || NumberUtils.isDigits(from) || NumberUtils.isDigits(to)) {
+			return PROPS_PREFIX + "vn";
+		}
+		return PROPS_PREFIX + "v";
+	}
+
+	/**
+	 * @param v search term
+	 * @return the long value of v if it is a number
+	 */
+	static Object getNumericValue(String v) {
+		return NumberUtils.isDigits(v) ? NumberUtils.toLong(v, 0) : v;
 	}
 
 	/**
@@ -703,7 +1083,7 @@ public final class ElasticSearchUtils {
 	 * @param appid an app identifer
 	 * @return the correct index name
 	 */
-	protected static String getIndexName(String appid) {
+	static String getIndexName(String appid) {
 		return appid.trim();
 	}
 
@@ -711,7 +1091,7 @@ public final class ElasticSearchUtils {
 	 * Para indices have 1 type only - "paraobject". From v6 onwards, ES allows only 1 type per index.
 	 * @return "paraobject"
 	 */
-	protected static String getType() {
+	static String getType() {
 		return ParaObject.class.getSimpleName().toLowerCase();
 	}
 
@@ -719,7 +1099,7 @@ public final class ElasticSearchUtils {
 	 * @param indexName index name or alias
 	 * @return e.g. "index-name_*"
 	 */
-	protected static String getIndexNameWithWildcard(String indexName) {
+	static String getIndexNameWithWildcard(String indexName) {
 		return StringUtils.contains(indexName, "_") ? indexName : indexName + "_*"; // ES v6
 	}
 }
