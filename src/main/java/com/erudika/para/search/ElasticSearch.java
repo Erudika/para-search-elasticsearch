@@ -354,6 +354,9 @@ public class ElasticSearch implements Search {
 		QueryBuilder qb;
 		if (nestedMode() && query.matches(PROPS_REGEX)) {
 			qb = convertQueryStringToNestedQuery(query);
+			if (qb == null) {
+				return Collections.emptyList();
+			}
 		} else {
 			qb = queryStringQuery(qs(query)).allowLeadingWildcard(false);
 		}

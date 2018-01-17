@@ -241,8 +241,9 @@ public class ElasticSearchIT extends SearchTest {
 		List<ParaObject> r32 = s.findQuery(indexInNestedMode, "cat", "timestamp:{12345678 TO *} AND properties.owner.age:{* TO 34]");
 		List<ParaObject> r33 = s.findQuery(indexInNestedMode, "cat", "-properties.owner.age:[* TO 33]");
 		List<ParaObject> r34 = s.findQuery(indexInNestedMode, "cat", "chris");
-		List<ParaObject> r35 = s.findQuery(indexInNestedMode, "cat", "properties.owner.age:*");
+		List<ParaObject> r35 = s.findQuery(indexInNestedMode, "cat", "properties.owner.age:[* TO *]");
 		assertTrue(s.findQuery(indexInNestedMode, "cat", "dog AND properties.owner.age:34").isEmpty());
+		assertEquals(3, s.findQuery(indexInNestedMode, "cat", "*").size());
 		assertEquals(1, s.findQuery(indexInNestedMode, "cat", "dog OR properties.owner.age:34").size());
 		assertEquals(3, s.findQuery(indexInNestedMode, "cat", "properties.owner.name:[alice TO chris]").size());
 		assertEquals(2, s.findQuery(indexInNestedMode, "cat", "properties.owner.name:[alice TO chris}").size());
@@ -256,6 +257,12 @@ public class ElasticSearchIT extends SearchTest {
 		assertEquals(1, r34.size());
 		assertEquals("c3", r34.get(0).getId());
 		assertEquals(3, r35.size());
+
+		// max query depth: 10
+		assertFalse(s.findQuery(indexInNestedMode, "cat", "properties.owner.age:[* TO *] AND (c1 OR (c2 AND "
+				+ "(c3 OR (c4 AND (c5 OR (c6 AND (c7 OR (c8 AND (c9 OR c10)))))))))").isEmpty());
+		assertTrue(s.findQuery(indexInNestedMode, "cat", "properties.owner.age:[* TO *] AND (c1 OR (c2 AND "
+				+ "(c3 OR (c4 AND (c5 OR (c6 AND (c7 OR (c8 AND (c9 OR (c10 AND (c11 OR c12)))))))))))").isEmpty());
 
 		// findWildcard
 		assertEquals(1, s.findWildcard(indexInNestedMode, "cat", "properties.owner.name", "ali*").size());

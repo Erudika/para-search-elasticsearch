@@ -95,6 +95,7 @@ public final class ElasticSearchUtils {
 
 	private static final Logger logger = LoggerFactory.getLogger(ElasticSearchUtils.class);
 	private static TransportClient searchClient;
+	private static final int MAX_QUERY_DEPTH = 10; // recursive depth for compound queries - bool, boost
 	private static final String DATE_FORMAT = "epoch_millis||epoch_second||yyyy-MM-dd HH:mm:ss||"
 			+ "yyyy-MM-dd||yyyy/MM/dd||yyyyMMdd||yyyy";
 
@@ -121,7 +122,7 @@ public final class ElasticSearchUtils {
 	 */
 	private static String getDefaultMapping() {
 		return "{\n" +
-			"  \"_default_\": {\n" +
+			"  \"paraobject\": {\n" +
 			"    \"properties\": {\n" +
 			"      \"nstd\": {\"type\": \"nested\"},\n" +
 			"      \"properties\": {\"type\": \"" + (nestedMode() ? "nested" : "object") + "\"},\n" +
@@ -246,7 +247,7 @@ public final class ElasticSearchUtils {
 					setSettings(settings.build());
 
 			// default system mapping (all the rest are dynamic)
-			create.addMapping("_default_", getDefaultMapping(), XContentType.JSON);
+			create.addMapping("paraobject", getDefaultMapping(), XContentType.JSON);
 			create.execute().actionGet();
 			logger.info("Created a new index '{}' with {} shards, {} replicas.", name, shards, replicas);
 		} catch (Exception e) {
@@ -745,10 +746,9 @@ public final class ElasticSearchUtils {
 		source.putAll(data);
 		if (nestedMode() && po instanceof Sysprop) {
 			try {
-				List<Map<String, Object>> keysAndValues = new LinkedList<>();
 				Map<String, Object> props = (Map<String, Object>) data.get(PROPS_FIELD);
 				// flatten properites object to array of keys/values, to prevent field mapping explosion
-				addFieldsToSource(props, keysAndValues, "");
+				List<Map<String, Object>> keysAndValues = getNestedProperties(props);
 				source.put(PROPS_FIELD, keysAndValues); // overwrite properties object with flattened array
 				// special field for holding the original sysprop.properties map as JSON string
 				source.put(PROPS_JSON, ParaObjectUtils.getJsonWriterNoIdent().writeValueAsString(props));
@@ -773,38 +773,56 @@ public final class ElasticSearchUtils {
 	 * @param fieldPrefix a field prefix, e.g. "properties.key"
 	 */
 	@SuppressWarnings("unchecked")
-	private static void addFieldsToSource(Map<String, Object> objectData, List<Map<String, Object>> keysAndValues,
-			String fieldPrefix) {
-		if (objectData == null || keysAndValues == null) {
-			return;
+	private static List<Map<String, Object>> getNestedProperties(Map<String, Object> objectData) {
+		if (objectData == null || objectData.isEmpty()) {
+			return Collections.emptyList();
 		}
-		for (Entry<String, Object> entry : objectData.entrySet()) {
-			String pre = (StringUtils.isBlank(fieldPrefix) ? "" : fieldPrefix + "-");
-			String field = pre + entry.getKey();
-			Object value = entry.getValue();
+		List<Map<String, Object>> keysAndValues = new LinkedList<>();
+		LinkedList<Map<String, Object>> stack = new LinkedList<>();
+		stack.add(Collections.singletonMap("", objectData));
+		while (!stack.isEmpty()) {
+			Map<String, Object> singletonMap = stack.pop();
+			String prefix = singletonMap.keySet().iterator().next();
+			Object value = singletonMap.get(prefix);
 			if (value != null) {
-				Map<String, Object> propMap = new HashMap<String, Object>(2);
-				propMap.put("k", field);
 				if (value instanceof Map) {
-					// recursively flatten all nested objects
-					addFieldsToSource((Map<String, Object>) value, keysAndValues, pre + field);
-				} else if (value instanceof List) {
-					// input array: key: [value1, value2]
-					// flattened array: [{k: key.0, v: value1}, {k: key.1, v: value2}]
-					for (int i = 0; i < ((List) value).size(); i++) {
-						Object val = ((List) value).get(i);
-						addFieldsToSource(Collections.singletonMap(String.valueOf(i), val), keysAndValues, pre + field);
+					String pre = (StringUtils.isBlank(prefix) ? "" : prefix + "-");
+					for (Entry<String, Object> entry : ((Map<String, Object>) value).entrySet()) {
+						addFieldToStack(pre + entry.getKey(), entry.getValue(), stack, keysAndValues);
 					}
-				} else if (value instanceof Number) {
-					propMap.put("vn", value);
-					keysAndValues.add(propMap);
 				} else {
-					// boolean and Date data types are ommited for simplicity
-					propMap.put("v", String.valueOf(value));
-					keysAndValues.add(propMap);
+					addFieldToStack(prefix, value, stack, keysAndValues);
 				}
 			}
 		}
+		return keysAndValues;
+	}
+
+	private static void addFieldToStack(String prefix, Object val, LinkedList<Map<String, Object>> stack,
+			List<Map<String, Object>> keysAndValues) {
+		if (val instanceof Map) {
+			// flatten all nested objects
+			stack.push(Collections.singletonMap(prefix, val));
+		} else if (val instanceof List) {
+			// input array: key: [value1, value2] - [{k: key-0, v: value1}, {k: key-1, v: value2}]
+			for (int i = 0; i < ((List) val).size(); i++) {
+				stack.push(Collections.singletonMap(prefix + "-" + String.valueOf(i), ((List) val).get(i)));
+			}
+		} else {
+			keysAndValues.add(getKeyValueField(prefix, val));
+		}
+	}
+
+	private static Map<String, Object> getKeyValueField(String field, Object value) {
+		Map<String, Object> propMap = new HashMap<String, Object>(2);
+		propMap.put("k", field);
+		if (value instanceof Number) {
+			propMap.put("vn", value);
+		} else {
+			// boolean and Date data types are ommited for simplicity
+			propMap.put("v", String.valueOf(value));
+		}
+		return propMap;
 	}
 
 	/**
@@ -869,37 +887,45 @@ public final class ElasticSearchUtils {
 		if (q == null) {
 			return matchAllQuery();
 		}
-		return rewriteQuery(q);
+		try {
+			return rewriteQuery(q, 0);
+		} catch (Exception e) {
+			logger.warn(e.getMessage());
+			return null;
+		}
 	}
 
 	/**
 	 * @param q parsed Lucene query string query
 	 * @return a rewritten query with nested queries for custom properties (when in nested mode)
 	 */
-	private static QueryBuilder rewriteQuery(Query q) {
+	private static QueryBuilder rewriteQuery(Query q, int depth) throws IllegalAccessException {
+		if (depth > MAX_QUERY_DEPTH) {
+			throw new IllegalArgumentException("`Query depth exceeded! Max depth: " + MAX_QUERY_DEPTH);
+		}
 		QueryBuilder qb = null;
 		if (q instanceof BooleanQuery) {
 			qb = boolQuery();
 			for (BooleanClause clause : ((BooleanQuery) q).clauses()) {
 				switch (clause.getOccur()) {
 					case MUST:
-						((BoolQueryBuilder) qb).must(rewriteQuery(clause.getQuery()));
+						((BoolQueryBuilder) qb).must(rewriteQuery(clause.getQuery(), depth++));
 						break;
 					case MUST_NOT:
-						((BoolQueryBuilder) qb).mustNot(rewriteQuery(clause.getQuery()));
+						((BoolQueryBuilder) qb).mustNot(rewriteQuery(clause.getQuery(), depth++));
 						break;
 					case FILTER:
-						((BoolQueryBuilder) qb).filter(rewriteQuery(clause.getQuery()));
+						((BoolQueryBuilder) qb).filter(rewriteQuery(clause.getQuery(), depth++));
 						break;
 					case SHOULD:
 					default:
-						((BoolQueryBuilder) qb).should(rewriteQuery(clause.getQuery()));
+						((BoolQueryBuilder) qb).should(rewriteQuery(clause.getQuery(), depth++));
 				}
 			}
 		} else if (q instanceof TermRangeQuery) {
 			qb = termRange(q);
 		} else if (q instanceof BoostQuery) {
-			qb = rewriteQuery(((BoostQuery) q).getQuery()).boost(((BoostQuery) q).getBoost());
+			qb = rewriteQuery(((BoostQuery) q).getQuery(), depth++).boost(((BoostQuery) q).getBoost());
 		} else if (q instanceof TermQuery) {
 			qb = term(q);
 		} else if (q instanceof FuzzyQuery) {
