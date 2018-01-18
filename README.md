@@ -107,6 +107,17 @@ Switching to the new nested indexing mode is done with the configuration propert
 para.es.es.use_nested_custom_fields = true
 ```
 
+Another benefit, when using the "nested" mode, is the support for nested queries in query strings.
+This is a really useful feature which, at the time of writing this, has not yet been implemented in Elasticsearch
+(issue [elastic/elasticsearch#11322](https://github.com/elastic/elasticsearch/issues/11322)). Even better, you can
+query objects within nested arrays with pinpoint precision, e.g. `?q=properties.nestedArray[2].key:value`.
+A nested query string query is detected if it contains a field with prefix `properties.*`.
+Examples of query string queries:
+```
+/v1/search?q=term AND properties.owner.age:[* TO 34]
+/v1/search?q=properties.owner.name:alice OR properties.owner.pets[1].name=whiskers
+```
+
 ### Calling Elasticsearch through the proxy endpoint
 
 You can directly call the Elasticsearch API through `/v1/_elasticsearch`. To enable it set `para.es.proxy_enabled = true` first.
