@@ -206,6 +206,9 @@ public class ElasticSearchIT extends SearchTest {
 		owner1.put("age", 33);
 		owner2.put("age", 34);
 		owner3.put("age", 35);
+		owner1.put("nestedArray", Arrays.asList(Collections.singletonMap("sk", "one1"), Collections.singletonMap("sk", "one2")));
+		owner2.put("nestedArray", Arrays.asList(Collections.singletonMap("sk", "two1"), Collections.singletonMap("sk", "two2")));
+		owner3.put("nestedArray", Arrays.asList(Collections.singletonMap("sk", "tri1"), Collections.singletonMap("sk", "tri2")));
 
 		c1.addProperty("owner", owner1);
 		c2.addProperty("owner", owner2);
@@ -242,6 +245,7 @@ public class ElasticSearchIT extends SearchTest {
 		List<ParaObject> r33 = s.findQuery(indexInNestedMode, "cat", "-properties.owner.age:[* TO 33]");
 		List<ParaObject> r34 = s.findQuery(indexInNestedMode, "cat", "chris");
 		List<ParaObject> r35 = s.findQuery(indexInNestedMode, "cat", "properties.owner.age:[* TO *]");
+		List<ParaObject> r36 = s.findQuery(indexInNestedMode, "cat", "properties.owner.nestedArray[1].sk:two2");
 		assertTrue(s.findQuery(indexInNestedMode, "cat", "dog AND properties.owner.age:34").isEmpty());
 		assertEquals(3, s.findQuery(indexInNestedMode, "cat", "*").size());
 		assertEquals(1, s.findQuery(indexInNestedMode, "cat", "dog OR properties.owner.age:34").size());
@@ -257,6 +261,8 @@ public class ElasticSearchIT extends SearchTest {
 		assertEquals(1, r34.size());
 		assertEquals("c3", r34.get(0).getId());
 		assertEquals(3, r35.size());
+		assertEquals(1, r36.size());
+		assertEquals("c2", r36.get(0).getId());
 
 		// max query depth: 10
 		assertFalse(s.findQuery(indexInNestedMode, "cat", "properties.owner.age:[* TO *] AND (c1 OR (c2 AND "
@@ -276,6 +282,12 @@ public class ElasticSearchIT extends SearchTest {
 		terms.put("properties.owner.age>=", 33);
 		assertEquals(2, s.findTerms(indexInNestedMode, "cat", terms, true).size());
 		assertEquals(3, s.findTerms(indexInNestedMode, "cat", terms, false).size());
+		// pinpoint the exact term in a nested array - special syntax "properties.arr[0]:term"
+		Map<String, Object> terms2 = new HashMap<String, Object>();
+		terms2.put("properties.owner.nestedArray[0].sk", "tri1");
+		List<ParaObject> nestedArrayPinpoint = s.findTerms(indexInNestedMode, "cat", terms2, true);
+		assertEquals(1, nestedArrayPinpoint.size());
+		assertEquals("c3", nestedArrayPinpoint.get(0).getId());
 
 		// findSimilar
 		assertTrue(s.findSimilar(indexInNestedMode, "cat", "", null, null).isEmpty());

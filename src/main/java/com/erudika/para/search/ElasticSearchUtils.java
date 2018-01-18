@@ -883,7 +883,8 @@ public final class ElasticSearchUtils {
 	 * @return a list of composite queries for matching nested objects
 	 */
 	static QueryBuilder convertQueryStringToNestedQuery(String query) {
-		Query q = qsParsed(StringUtils.trimToEmpty(query));
+		String queryStr = StringUtils.trimToEmpty(query).replaceAll("\\[(\\d+)\\]", "-$1");
+		Query q = qsParsed(queryStr);
 		if (q == null) {
 			return matchAllQuery();
 		}
@@ -1070,7 +1071,7 @@ public final class ElasticSearchUtils {
 	 */
 	static String getNestedKey(String key) {
 		if (StringUtils.startsWith(key, PROPS_PREFIX)) {
-			return StringUtils.removeStart(key, PROPS_PREFIX).replaceAll("\\.", "-");
+			return StringUtils.removeStart(key, PROPS_PREFIX).replaceAll("\\[(\\d+)\\]", "-$1").replaceAll("\\.", "-");
 		}
 		return key;
 	}
