@@ -209,6 +209,9 @@ public class ElasticSearchIT extends SearchTest {
 		owner1.put("nestedArray", Arrays.asList(Collections.singletonMap("sk", "one1"), Collections.singletonMap("sk", "one2")));
 		owner2.put("nestedArray", Arrays.asList(Collections.singletonMap("sk", "two1"), Collections.singletonMap("sk", "two2")));
 		owner3.put("nestedArray", Arrays.asList(Collections.singletonMap("sk", "tri1"), Collections.singletonMap("sk", "tri2")));
+		owner1.put("nestedTags", Arrays.asList("one1", "one2"));
+		owner2.put("nestedTags", Arrays.asList("two1", "two2"));
+		owner3.put("nestedTags", Arrays.asList("tri1", "tri2"));
 
 		c1.addProperty("owner", owner1);
 		c2.addProperty("owner", owner2);
@@ -252,6 +255,7 @@ public class ElasticSearchIT extends SearchTest {
 		assertEquals(3, s.findQuery(indexInNestedMode, "cat", "properties.owner.name:[alice TO chris]").size());
 		assertEquals(2, s.findQuery(indexInNestedMode, "cat", "properties.owner.name:[alice TO chris}").size());
 		assertEquals(1, s.findQuery(indexInNestedMode, "cat", "properties.owner.name:{alice TO chris}").size());
+		assertEquals(0, s.findQuery(indexInNestedMode, "cat", "properties.owner.nestedTags").size());
 		assertEquals(1, r31.size());
 		assertEquals("c2", r31.get(0).getId());
 		assertEquals(1, r32.size());
@@ -288,6 +292,12 @@ public class ElasticSearchIT extends SearchTest {
 		List<ParaObject> nestedArrayPinpoint = s.findTerms(indexInNestedMode, "cat", terms2, true);
 		assertEquals(1, nestedArrayPinpoint.size());
 		assertEquals("c3", nestedArrayPinpoint.get(0).getId());
+
+		Map<String, Object> tags = new HashMap<String, Object>();
+		tags.put("properties.owner.nestedTags", "tri2");
+		List<ParaObject> tagsRes = s.findTerms(indexInNestedMode, "cat", tags, true);
+		assertEquals(1, tagsRes.size());
+		assertEquals("c3", tagsRes.get(0).getId());
 
 		// findSimilar
 		assertTrue(s.findSimilar(indexInNestedMode, "cat", "", null, null).isEmpty());

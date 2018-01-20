@@ -883,7 +883,7 @@ public final class ElasticSearchUtils {
 	 * @return a list of composite queries for matching nested objects
 	 */
 	static QueryBuilder convertQueryStringToNestedQuery(String query) {
-		String queryStr = StringUtils.trimToEmpty(query).replaceAll("\\[(\\d+)\\]", "-$1");
+		String queryStr = StringUtils.trimToEmpty(query).replaceAll("\\[(\\d+)\\]", "-$1"); // nested array syntax
 		Query q = qsParsed(queryStr);
 		if (q == null) {
 			return matchAllQuery();
