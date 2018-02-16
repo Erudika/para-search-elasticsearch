@@ -71,6 +71,7 @@ public class ProxyResourceHandler implements CustomResourceHandler {
 	private final String esHost = Config.getConfigParam("es.restclient_host",
 		Config.getConfigParam("es.transportclient_host", "localhost"));
 	private final int esPort = Config.getConfigInt("es.restclient_port", 9200);
+	private RestClient lowLevelClient;
 
 	/**
 	 * Resource path. Defaults to '_elasticsearch'.
@@ -112,18 +113,18 @@ public class ProxyResourceHandler implements CustomResourceHandler {
 			return Response.status(Response.Status.FORBIDDEN.getStatusCode(), "This feature is disabled.").build();
 		}
 		String appid = ParaObjectUtils.getAppidFromAuthHeader(ctx.getHeaders().getFirst(HttpHeaders.AUTHORIZATION));
-		String path = getCleanPath(getPath(ctx));
 		if (StringUtils.isBlank(appid)) {
 			return Response.status(Response.Status.BAD_REQUEST).build();
 		}
+		String path = getCleanPath(appid, getPath(ctx));
 		try {
-			if ("reindex".equals(path) && POST.equals(method)) {
+			if (path.endsWith("/reindex") && POST.equals(method)) {
 				return handleReindexTask(appid);
 			}
 
 			Header[] headers = getHeaders(ctx.getHeaders());
 			HttpEntity resp;
-			RestClient client = getClient(appid);
+			RestClient client = getClient();
 			if (client != null) {
 				if (ctx.getEntityStream() != null && ctx.getEntityStream().available() > 0) {
 					HttpEntity body = new InputStreamEntity(ctx.getEntityStream(), ContentType.APPLICATION_JSON);
@@ -143,16 +144,27 @@ public class ProxyResourceHandler implements CustomResourceHandler {
 		return Response.status(Response.Status.BAD_REQUEST).build();
 	}
 
-	private RestClient getClient(String appid) {
-		try {
-			return RestClient.builder(new HttpHost(esHost, esPort, esScheme)).
-					// We prefix path with appid in order to route request to the correct index
-					// for a particular app. Also, append '/' to prevent other mishap.
-					setPathPrefix(appid.concat("/")).build();
-		} catch (Exception e) {
-			logger.error("Failed to build Elasticsearch client for app '{}': {}", appid, e.getMessage());
-			return null;
+	private RestClient getClient() {
+		if (lowLevelClient != null) {
+			return lowLevelClient;
 		}
+		try {
+			lowLevelClient = RestClient.builder(new HttpHost(esHost, esPort, esScheme)).build();
+			Runtime.getRuntime().addShutdownHook(new Thread() {
+				public void run() {
+					if (lowLevelClient != null) {
+						try {
+							lowLevelClient.close();
+						} catch (IOException ex) {
+							logger.error(null, ex);
+						}
+					}
+				}
+			});
+		} catch (Exception e) {
+			logger.error("Failed to initialize Elasticsearch low-level client: {}", e.getMessage());
+		}
+		return lowLevelClient;
 	}
 
 	private Header[] getHeaders(MultivaluedMap<String, String> headers) {
@@ -174,7 +186,7 @@ public class ProxyResourceHandler implements CustomResourceHandler {
 		return StringUtils.isBlank(path) ? "_search" : path;
 	}
 
-	String getCleanPath(String path) {
+	String getCleanPath(String appid, String path) {
 		if (StringUtils.containsIgnoreCase(path, "getRawResponse")) {
 			try {
 				URIBuilder uri = new URIBuilder(path);
@@ -191,7 +203,9 @@ public class ProxyResourceHandler implements CustomResourceHandler {
 				logger.warn(null, ex);
 			}
 		}
-		return StringUtils.isBlank(path) ? "_search" : path;
+		// We prefix path with appid (alias) in order to route request to the correct index
+		// for a particular app. Also, append '/' to prevent other mishap.
+		return appid.concat("/").concat(StringUtils.isBlank(path) ? "_search" : path);
 	}
 
 	private Response handleReindexTask(String appid) {
