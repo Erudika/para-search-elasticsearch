@@ -4,7 +4,7 @@
 
 	<groupId>com.erudika</groupId>
 	<artifactId>para-search-elasticsearch</artifactId>
-	<version>1.28.5-SNAPSHOT</version>
+	<version>1.28.5</version>
 	<packaging>jar</packaging>
 
 	<name>Para Elasticsearch Plugin</name>
@@ -40,7 +40,7 @@
 		<connection>scm:git:https://github.com/erudika/para-search-elasticsearch.git</connection>
 		<developerConnection>scm:git:git@github.com:erudika/para-search-elasticsearch.git</developerConnection>
 		<url>https://github.com/erudika/para-search-elasticsearch</url>
-		<tag>HEAD</tag>
+		<tag>1.28.5</tag>
 	</scm>
 
 	<issueManagement>
