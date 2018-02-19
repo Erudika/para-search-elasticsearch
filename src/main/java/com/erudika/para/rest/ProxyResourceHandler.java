@@ -203,9 +203,14 @@ public class ProxyResourceHandler implements CustomResourceHandler {
 				logger.warn(null, ex);
 			}
 		}
-		// We prefix path with appid (alias) in order to route request to the correct index
-		// for a particular app. Also, append '/' to prevent other mishap.
-		return appid.concat("/").concat(StringUtils.isBlank(path) ? "_search" : path);
+		if (path.startsWith("/")) {
+			path = StringUtils.stripStart(path, "/");
+		}
+		if (StringUtils.isBlank(path) || "/".equals(path)) {
+			path = "_search";
+		}
+		// Prefix path with appid (alias) in order to route requests to the correct index for a particular app.
+		return "/".concat(appid).concat("/").concat(path);
 	}
 
 	private Response handleReindexTask(String appid) {

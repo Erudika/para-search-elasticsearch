@@ -98,12 +98,13 @@ public class ProxyResourceHandlerIT extends JerseyTest {
 	public void testGetCleanPath() {
 		ProxyResourceHandler prh = new ProxyResourceHandler();
 		String appid = "app";
-		assertEquals(prh.getCleanPath(appid, ""), appid + "/_search");
-		assertEquals(prh.getCleanPath(appid, "_search?param=123"), appid + "/_search?param=123");
-		assertEquals(prh.getCleanPath(appid, "_search?param=123&param2=345"), appid + "/_search?param=123&param2=345");
-		assertEquals(prh.getCleanPath(appid, "_search?getRawResponse=true&param2=345"), appid + "/_search?param2=345");
-		assertEquals(prh.getCleanPath(appid, "_search?getRawResponse=1&param2=345"), appid + "/_search?param2=345");
-		assertEquals(prh.getCleanPath(appid, "_search?getrawresponse=1&param2=345"), appid + "/_search?param2=345");
+		String prefix = "/" + appid;
+		assertEquals(prh.getCleanPath(appid, ""), prefix + "/_search");
+		assertEquals(prh.getCleanPath(appid, "_search?param=123"), prefix + "/_search?param=123");
+		assertEquals(prh.getCleanPath(appid, "_search?param=123&param2=345"), prefix + "/_search?param=123&param2=345");
+		assertEquals(prh.getCleanPath(appid, "_search?getRawResponse=true&param2=345"), prefix + "/_search?param2=345");
+		assertEquals(prh.getCleanPath(appid, "_search?getRawResponse=1&param2=345"), prefix + "/_search?param2=345");
+		assertEquals(prh.getCleanPath(appid, "_search?getrawresponse=1&param2=345"), prefix + "/_search?param2=345");
 	}
 
 	@Test
