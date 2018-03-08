@@ -773,6 +773,16 @@ public class ElasticSearch implements Search {
 		return count;
 	}
 
+	@Override
+	public boolean rebuildIndex(DAO dao, App app, Pager... pager) {
+		return ElasticSearchUtils.rebuildIndex(dao, app, pager);
+	}
+
+	@Override
+	public boolean isValidQueryString(String queryString) {
+		return ElasticSearchUtils.isValidQueryString(queryString);
+	}
+
 	//////////////////////////////////////////////////////////////
 
 	@Override

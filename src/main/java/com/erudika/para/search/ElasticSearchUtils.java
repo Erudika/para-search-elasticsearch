@@ -58,6 +58,7 @@ import org.apache.http.client.utils.URIBuilder;
 import org.apache.http.impl.nio.client.HttpAsyncClientBuilder;
 import org.apache.http.protocol.HttpContext;
 import org.apache.lucene.index.Term;
+import org.apache.lucene.queryparser.flexible.core.QueryNodeException;
 import org.apache.lucene.queryparser.flexible.standard.StandardQueryParser;
 import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.BooleanQuery;
@@ -414,25 +415,25 @@ public final class ElasticSearchUtils {
 	 * Reads objects from the data store and indexes them in batches.
 	 * Works on one DB table and index only.
 	 * @param dao DAO for connecting to the DB - the primary data source
-	 * @param appid the index name (alias)
-	 * @param isShared is the app shared, controls index aliases and index switching
+	 * @param app an app
 	 * @param pager a Pager instance
 	 * @return true if successful, false if index doesn't exist or failed.
 	 */
-	public static boolean rebuildIndex(DAO dao, String appid, boolean isShared, Pager... pager) {
-		if (StringUtils.isBlank(appid) || dao == null) {
+	public static boolean rebuildIndex(DAO dao, App app, Pager... pager) {
+		if (app == null || StringUtils.isBlank(app.getAppIdentifier()) || dao == null) {
 			return false;
 		}
 		try {
-			String indexName = appid.trim();
-			if (!isShared && !existsIndex(indexName)) {
+
+			String indexName = app.getAppIdentifier().trim();
+			if (!app.isShared() && !existsIndex(indexName)) {
 				logger.info("Creating '{}' index because it doesn't exist.", indexName);
 				createIndex(indexName);
 			}
 			String oldName = getIndexNameForAlias(indexName);
 			String newName = indexName;
 
-			if (!isShared) {
+			if (!app.isShared()) {
 				newName = getNewIndexName(indexName, oldName);
 				createIndexWithoutAlias(newName, -1, -1); // use defaults
 			}
@@ -447,7 +448,7 @@ public final class ElasticSearchUtils {
 
 			List<ParaObject> list;
 			do {
-				list = dao.readPage(appid, p); // use appid!
+				list = dao.readPage(app.getAppIdentifier(), p); // use appid!
 				logger.debug("rebuildIndex(): Read {} objects from table {}.", list.size(), indexName);
 				for (ParaObject obj : list) {
 					if (obj != null) {
@@ -473,7 +474,7 @@ public final class ElasticSearchUtils {
 						bulk.numberOfActions(), resp.hasFailures() ? resp.buildFailureMessage() : "false");
 			}
 
-			if (!isShared) {
+			if (!app.isShared()) {
 				// switch to alias NEW_INDEX -> ALIAS, OLD_INDEX -> DELETE old index
 				switchIndexToAlias(oldName, newName, indexName, true);
 			}
@@ -860,6 +861,20 @@ public final class ElasticSearchUtils {
 			logger.warn("Failed to parse query string '{}'.", query);
 		}
 		return null;
+	}
+
+	static boolean isValidQueryString(String query) {
+		if (StringUtils.isBlank(query)) {
+			return false;
+		}
+		try {
+			StandardQueryParser parser = new StandardQueryParser();
+			parser.setAllowLeadingWildcard(false);
+			parser.parse(query, "");
+			return true;
+		} catch (QueryNodeException ex) {
+			return false;
+		}
 	}
 
 	/**

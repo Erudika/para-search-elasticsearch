@@ -222,7 +222,7 @@ public class ProxyResourceHandler implements CustomResourceHandler {
 		App app = dao.read(App.id(appid));
 		if (app != null) {
 			long startTime = System.nanoTime();
-			ElasticSearchUtils.rebuildIndex(dao, appid, app.isSharingIndex(), pager);
+			ElasticSearchUtils.rebuildIndex(dao, app, pager);
 			long tookMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startTime);
 			Map<String, Object> response = new HashMap<String, Object>();
 			response.put("reindexed", pager.getCount());
