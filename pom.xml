@@ -55,7 +55,7 @@
 		<skipTests>false</skipTests>
 		<skipITs>${skipTests}</skipITs>
 		<skipUTs>${skipTests}</skipUTs>
-		<elasticsearch.version>6.1.3</elasticsearch.version>
+		<elasticsearch.version>6.3.0-SNAPSHOT</elasticsearch.version>
 		<jerseyVer>2.26</jerseyVer>
 	</properties>
 
@@ -78,6 +78,16 @@
 			<groupId>org.elasticsearch.client</groupId>
 			<artifactId>transport</artifactId>
 			<version>${elasticsearch.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.elasticsearch.client</groupId>
+			<artifactId>elasticsearch-rest-high-level-client</artifactId>
+			<version>${elasticsearch.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.elasticsearch</groupId>
+			<artifactId>elasticsearch-secure-sm</artifactId>
+			<version>7.0.0-alpha1-SNAPSHOT</version>
 		</dependency>
 
 		<dependency>

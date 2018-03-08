@@ -91,11 +91,6 @@ public class ElasticSearchIT extends SearchTest {
 	}
 
 	@Test
-	public void testGetSearchClusterMetadata() {
-		assertFalse(ElasticSearchUtils.getSearchClusterInfo().isEmpty());
-	}
-
-	@Test
 	public void testGetIndexNameForAlias() throws InterruptedException {
 		String indexWithAlias = "test-index-with-alias";
 		ElasticSearchUtils.createIndex(indexWithAlias);

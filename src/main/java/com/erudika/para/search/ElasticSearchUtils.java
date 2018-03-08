@@ -17,14 +17,21 @@
  */
 package com.erudika.para.search;
 
+import com.amazonaws.auth.AWSCredentials;
+import com.amazonaws.auth.BasicAWSCredentials;
+import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.erudika.para.core.App;
 import com.erudika.para.core.ParaObject;
 import com.erudika.para.core.Sysprop;
 import com.erudika.para.core.utils.ParaObjectUtils;
 import com.erudika.para.persistence.DAO;
+import com.erudika.para.rest.Signer;
 import com.erudika.para.utils.Config;
 import com.erudika.para.utils.Pager;
 import com.erudika.para.utils.Utils;
+import com.fasterxml.jackson.databind.JsonNode;
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
@@ -38,6 +45,18 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.math.NumberUtils;
+import org.apache.http.Header;
+import org.apache.http.HttpEntity;
+import org.apache.http.HttpEntityEnclosingRequest;
+import org.apache.http.HttpException;
+import org.apache.http.HttpHost;
+import org.apache.http.HttpRequest;
+import org.apache.http.HttpResponse;
+import org.apache.http.HttpResponseInterceptor;
+import org.apache.http.NameValuePair;
+import org.apache.http.client.utils.URIBuilder;
+import org.apache.http.impl.nio.client.HttpAsyncClientBuilder;
+import org.apache.http.protocol.HttpContext;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.queryparser.flexible.standard.StandardQueryParser;
 import org.apache.lucene.search.BooleanClause;
@@ -52,15 +71,22 @@ import org.apache.lucene.search.WildcardQuery;
 import static org.apache.lucene.search.join.ScoreMode.Avg;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.DocWriteResponse;
-import org.elasticsearch.action.admin.cluster.node.info.NodeInfo;
-import org.elasticsearch.action.admin.cluster.node.info.NodesInfoRequest;
-import org.elasticsearch.action.admin.cluster.node.info.NodesInfoResponse;
+import org.elasticsearch.action.admin.indices.alias.IndicesAliasesRequest;
 import org.elasticsearch.action.admin.indices.alias.IndicesAliasesRequest.AliasActions;
-import org.elasticsearch.action.admin.indices.create.CreateIndexRequestBuilder;
+import org.elasticsearch.action.admin.indices.alias.get.GetAliasesRequest;
+import org.elasticsearch.action.admin.indices.create.CreateIndexRequest;
+import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequest;
+import org.elasticsearch.action.admin.indices.exists.indices.IndicesExistsRequest;
+import org.elasticsearch.action.admin.indices.get.GetIndexRequest;
 import org.elasticsearch.action.admin.indices.get.GetIndexResponse;
-import org.elasticsearch.action.bulk.BulkRequestBuilder;
+import org.elasticsearch.action.bulk.BulkRequest;
 import org.elasticsearch.action.bulk.BulkResponse;
+import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.client.Client;
+import org.elasticsearch.client.Response;
+import org.elasticsearch.client.RestClient;
+import org.elasticsearch.client.RestClientBuilder;
+import org.elasticsearch.client.RestHighLevelClient;
 import org.elasticsearch.client.transport.TransportClient;
 import org.elasticsearch.cluster.health.ClusterHealthStatus;
 import org.elasticsearch.common.settings.Settings;
@@ -95,6 +121,7 @@ public final class ElasticSearchUtils {
 
 	private static final Logger logger = LoggerFactory.getLogger(ElasticSearchUtils.class);
 	private static TransportClient searchClient;
+	private static RestHighLevelClient restClient;
 	private static final int MAX_QUERY_DEPTH = 10; // recursive depth for compound queries - bool, boost
 	private static final String DATE_FORMAT = "epoch_millis||epoch_second||yyyy-MM-dd HH:mm:ss||"
 			+ "yyyy-MM-dd||yyyy/MM/dd||yyyyMMdd||yyyy";
@@ -103,6 +130,7 @@ public final class ElasticSearchUtils {
 	static final String PROPS_PREFIX = PROPS_FIELD + ".";
 	static final String PROPS_JSON = "_" + PROPS_FIELD;
 	static final String PROPS_REGEX = "(^|.*\\W)" + PROPS_FIELD + "[\\.\\:].+";
+	static final boolean USE_TRANSPORT_CLIENT = Config.getConfigBoolean("es.use_transportclient", false);
 
 	/**
 	 * Switches between normal indexing and indexing with nested key/value objects for Sysprop.properties.
@@ -164,50 +192,79 @@ public final class ElasticSearchUtils {
 
 	private ElasticSearchUtils() { }
 
+	static void initClient() {
+		if (USE_TRANSPORT_CLIENT) {
+			getTransportClient();
+		} else {
+			getRESTClient();
+		}
+	}
+
 	/**
-	 * Creates an instance of the client that talks to Elasticsearch.
-	 * @return a client instance
+	 * Creates an instance of the legacy transport client that talks to Elasticsearch.
+	 * @return a TransportClient instance
 	 */
-	public static Client getClient() {
+	public static Client getTransportClient() {
 		if (searchClient != null) {
 			return searchClient;
 		}
+		// https://www.elastic.co/guide/en/elasticsearch/client/java-api/current/client.html
+		logger.warn("Using Transport client, which is scheduled for deprecation in Elasticsearch 7.x.");
 		String esHost = Config.getConfigParam("es.transportclient_host", "localhost");
 		int esPort = Config.getConfigInt("es.transportclient_port", 9300);
-		boolean useTransportClient = Config.getConfigBoolean("es.use_transportclient", true);
-
 		Settings.Builder settings = Settings.builder();
 		settings.put("client.transport.sniff", true);
 		settings.put("cluster.name", Config.CLUSTER_NAME);
-
-		if (useTransportClient) {
-			searchClient = new PreBuiltTransportClient(settings.build());
-			TransportAddress addr;
-			try {
-				addr = new TransportAddress(InetAddress.getByName(esHost), esPort);
-			} catch (UnknownHostException ex) {
-				addr = new TransportAddress(InetAddress.getLoopbackAddress(), esPort);
-				logger.warn("Unknown host: " + esHost, ex);
-			}
-			searchClient.addTransportAddress(addr);
-		} else {
-			throw new UnsupportedOperationException("REST client is yet to be supported in Elasticsearch v6.");
+		searchClient = new PreBuiltTransportClient(settings.build());
+		TransportAddress addr;
+		try {
+			addr = new TransportAddress(InetAddress.getByName(esHost), esPort);
+		} catch (UnknownHostException ex) {
+			addr = new TransportAddress(InetAddress.getLoopbackAddress(), esPort);
+			logger.warn("Unknown host: " + esHost, ex);
 		}
+		searchClient.addTransportAddress(addr);
 
 		Runtime.getRuntime().addShutdownHook(new Thread() {
 			public void run() {
 				shutdownClient();
 			}
 		});
-		// wait for the shards to initialize - prevents NoShardAvailableActionException!
-		String timeout = Config.IN_PRODUCTION ? "1m" : "5s";
-		searchClient.admin().cluster().prepareHealth(Config.getRootAppIdentifier()).
-				setWaitForGreenStatus().setTimeout(timeout).execute().actionGet();
 
 		if (!existsIndex(Config.getRootAppIdentifier())) {
 			createIndex(Config.getRootAppIdentifier());
 		}
 		return searchClient;
+	}
+
+	/**
+	 * Creates an instance of the high-level REST client that talks to Elasticsearch.
+	 * @return a RestHighLevelClient instance
+	 */
+	public static RestHighLevelClient getRESTClient() {
+		if (restClient != null) {
+			return restClient;
+		}
+		String esScheme = Config.getConfigParam("es.restclient_scheme", Config.IN_PRODUCTION ? "https" : "http");
+		String esHost = Config.getConfigParam("es.restclient_host", "localhost");
+		int esPort = Config.getConfigInt("es.restclient_port", 9200);
+		boolean signRequests = Config.getConfigBoolean("es.sign_requests_to_aws", esHost.contains("amazonaws.com"));
+		HttpHost host = new HttpHost(esHost, esPort, esScheme);
+		RestClientBuilder clientBuilder = RestClient.builder(host);
+		if (signRequests) {
+			clientBuilder.setHttpClientConfigCallback(getAWSRequestSigningInterceptor(host.toURI()));
+		}
+		restClient = new RestHighLevelClient(clientBuilder);
+
+		Runtime.getRuntime().addShutdownHook(new Thread() {
+			public void run() {
+				shutdownClient();
+			}
+		});
+		if (!existsIndex(Config.getRootAppIdentifier())) {
+			createIndex(Config.getRootAppIdentifier());
+		}
+		return restClient;
 	}
 
 	/**
@@ -217,6 +274,13 @@ public final class ElasticSearchUtils {
 		if (searchClient != null) {
 			searchClient.close();
 			searchClient = null;
+		}
+		if (restClient != null) {
+			try {
+				restClient.close();
+			} catch (IOException ex) {
+				logger.error(null, ex);
+			}
 		}
 	}
 
@@ -243,12 +307,14 @@ public final class ElasticSearchUtils {
 					"norwegian", "persian", "portuguese", "romanian", "russian", "spanish",
 					"swedish", "turkish");
 
-			CreateIndexRequestBuilder create = getClient().admin().indices().prepareCreate(name).
-					setSettings(settings.build());
-
-			// default system mapping (all the rest are dynamic)
-			create.addMapping("paraobject", getDefaultMapping(), XContentType.JSON);
-			create.execute().actionGet();
+			// create index with default system mappings; ES allows only one type per index
+			CreateIndexRequest create = new CreateIndexRequest(name, settings.build()).
+					mapping("paraobject", getDefaultMapping(), XContentType.JSON);
+			if (USE_TRANSPORT_CLIENT) {
+				getTransportClient().admin().indices().create(create).actionGet();
+			} else {
+				getRESTClient().indices().create(create);
+			}
 			logger.info("Created a new index '{}' with {} shards, {} replicas.", name, shards, replicas);
 		} catch (Exception e) {
 			logger.warn(null, e);
@@ -303,7 +369,12 @@ public final class ElasticSearchUtils {
 		try {
 			String indexName = getIndexNameWithWildcard(appid.trim());
 			logger.info("Deleted ES index '{}'.", indexName);
-			getClient().admin().indices().prepareDelete(indexName).execute().actionGet();
+			DeleteIndexRequest delete = new DeleteIndexRequest(indexName);
+			if (USE_TRANSPORT_CLIENT) {
+				getTransportClient().admin().indices().delete(delete).actionGet();
+			} else {
+				getRESTClient().indices().delete(delete);
+			}
 		} catch (Exception e) {
 			logger.warn(null, e);
 			return false;
@@ -324,10 +395,16 @@ public final class ElasticSearchUtils {
 		boolean exists = true;
 		try {
 			String indexName = appid.trim();
-			exists = getClient().admin().indices().prepareExists(indexName).execute().
-					actionGet().isExists();
+			if (USE_TRANSPORT_CLIENT) {
+				IndicesExistsRequest get = new IndicesExistsRequest(indexName);
+				exists = getTransportClient().admin().indices().exists(get).actionGet().isExists();
+			} else {
+				GetIndexRequest get = new GetIndexRequest().indices(indexName);
+				exists = getRESTClient().indices().exists(get);
+			}
 		} catch (Exception e) {
 			logger.warn(null, e);
+			exists = false;
 		}
 		return exists;
 	}
@@ -362,7 +439,7 @@ public final class ElasticSearchUtils {
 
 			logger.info("rebuildIndex(): {}", indexName);
 
-			BulkRequestBuilder brb = getClient().prepareBulk();
+			BulkRequest bulk = new BulkRequest();
 			BulkResponse resp;
 			Pager p = getPager(pager);
 			int batchSize = Config.getConfigInt("reindex_batch_size", p.getLimit());
@@ -375,26 +452,25 @@ public final class ElasticSearchUtils {
 				for (ParaObject obj : list) {
 					if (obj != null) {
 						// put objects from DB into the newly created index
-						brb.add(getClient().prepareIndex(newName, getType(), obj.getId()).
-								setSource(getSourceFromParaObject(obj)).request());
+						bulk.add(new IndexRequest(newName, getType(), obj.getId()).source(getSourceFromParaObject(obj)));
 						// index in batches of ${queueSize} objects
-						if (brb.numberOfActions() >= batchSize) {
-							reindexedCount += brb.numberOfActions();
-							resp = brb.execute().actionGet();
+						if (bulk.numberOfActions() >= batchSize) {
+							reindexedCount += bulk.numberOfActions();
+							resp = bulkRequest(bulk);
 							logger.info("rebuildIndex(): indexed {}, failures: {}",
-									brb.numberOfActions(), resp.hasFailures() ? resp.buildFailureMessage() : "false");
-							brb = getClient().prepareBulk();
+									bulk.numberOfActions(), resp.hasFailures() ? resp.buildFailureMessage() : "false");
+							bulk = new BulkRequest();
 						}
 					}
 				}
 			} while (!list.isEmpty());
 
 			// anything left after loop? index that too
-			if (brb.numberOfActions() > 0) {
-				reindexedCount += brb.numberOfActions();
-				resp = brb.execute().actionGet();
+			if (bulk.numberOfActions() > 0) {
+				reindexedCount += bulk.numberOfActions();
+				resp = bulkRequest(bulk);
 				logger.info("rebuildIndex(): indexed {}, failures: {}",
-						brb.numberOfActions(), resp.hasFailures() ? resp.buildFailureMessage() : "false");
+						bulk.numberOfActions(), resp.hasFailures() ? resp.buildFailureMessage() : "false");
 			}
 
 			if (!isShared) {
@@ -407,6 +483,14 @@ public final class ElasticSearchUtils {
 			return false;
 		}
 		return true;
+	}
+
+	private static BulkResponse bulkRequest(BulkRequest bulk) throws IOException {
+		if (USE_TRANSPORT_CLIENT) {
+			return getTransportClient().bulk(bulk).actionGet();
+		} else {
+			return getRESTClient().bulk(bulk);
+		}
 	}
 
 	/**
@@ -454,15 +538,6 @@ public final class ElasticSearchUtils {
 	}
 
 	/**
-	 * Returns information about a cluster.
-	 * @return a map of key value pairs containing cluster information
-	 */
-	public static Map<String, NodeInfo> getSearchClusterInfo() {
-		NodesInfoResponse res = getClient().admin().cluster().nodesInfo(new NodesInfoRequest().all()).actionGet();
-		return res.getNodesMap();
-	}
-
-	/**
 	 * Adds a new alias to an existing index with routing and filtering by appid.
 	 * @param indexName the index name
 	 * @param aliasName the alias
@@ -486,16 +561,20 @@ public final class ElasticSearchUtils {
 		try {
 			String alias = aliasName.trim();
 			String index = getIndexNameWithWildcard(indexName.trim());
-			AliasActions aliasBuilder;
+			AliasActions addAction;
 			if (withAliasRouting) {
-				aliasBuilder = AliasActions.add().index(index).alias(alias).
+				addAction = AliasActions.add().index(index).alias(alias).
 						searchRouting(alias).indexRouting(alias).
 						filter(termQuery(Config._APPID, aliasName)); // DO NOT trim filter query!
 			} else {
-				aliasBuilder = AliasActions.add().index(index).alias(alias);
+				addAction = AliasActions.add().index(index).alias(alias);
 			}
-			return getClient().admin().indices().prepareAliases().addAliasAction(aliasBuilder).
-					execute().actionGet().isAcknowledged();
+			IndicesAliasesRequest actions = new IndicesAliasesRequest().addAliasAction(addAction);
+			if (USE_TRANSPORT_CLIENT) {
+				return getTransportClient().admin().indices().aliases(actions).actionGet().isAcknowledged();
+			} else {
+				return getRESTClient().indices().updateAliases(actions).isAcknowledged();
+			}
 		} catch (Exception e) {
 			logger.error(null, e);
 			return false;
@@ -512,10 +591,20 @@ public final class ElasticSearchUtils {
 		if (StringUtils.isBlank(aliasName) || !existsIndex(indexName)) {
 			return false;
 		}
-		String alias = aliasName.trim();
-		String index = getIndexNameWithWildcard(indexName.trim());
-		return getClient().admin().indices().prepareAliases().removeAlias(index, alias).
-				execute().actionGet().isAcknowledged();
+		try {
+			String alias = aliasName.trim();
+			String index = getIndexNameWithWildcard(indexName.trim());
+			AliasActions removeAction = AliasActions.remove().index(index).alias(alias);
+			IndicesAliasesRequest actions = new IndicesAliasesRequest().addAliasAction(removeAction);
+			if (USE_TRANSPORT_CLIENT) {
+				return getTransportClient().admin().indices().aliases(actions).actionGet().isAcknowledged();
+			} else {
+				return getRESTClient().indices().updateAliases(actions).isAcknowledged();
+			}
+		} catch (Exception e) {
+			logger.error(null, e);
+			return false;
+		}
 	}
 
 	/**
@@ -528,10 +617,19 @@ public final class ElasticSearchUtils {
 		if (StringUtils.isBlank(indexName) || StringUtils.isBlank(aliasName)) {
 			return false;
 		}
-		String alias = aliasName.trim();
-		String index = getIndexNameWithWildcard(indexName.trim());
-		return getClient().admin().indices().prepareAliasesExist(index).addAliases(alias).
-				execute().actionGet().exists();
+		try {
+			String alias = aliasName.trim();
+			String index = getIndexNameWithWildcard(indexName.trim());
+			GetAliasesRequest getAlias = new GetAliasesRequest().indices(index).aliases(alias);
+			if (USE_TRANSPORT_CLIENT) {
+				return getTransportClient().admin().indices().aliasesExist(getAlias).actionGet().exists();
+			} else {
+				return getRESTClient().indices().existsAlias(getAlias);
+			}
+		} catch (Exception e) {
+			logger.error(null, e);
+			return false;
+		}
 	}
 
 	/**
@@ -550,13 +648,17 @@ public final class ElasticSearchUtils {
 			String oldName = oldIndex.trim();
 			String newName = newIndex.trim();
 			logger.info("Switching index aliases {}->{}, deleting '{}': {}", aliaz, newIndex, oldIndex, deleteOld);
-			getClient().admin().indices().prepareAliases().
-					addAlias(newName, aliaz).
-					removeAlias(oldName, aliaz).
-					execute().actionGet();
-			// delete the old index
+			AliasActions removeAction = AliasActions.removeIndex().index(oldName).alias(aliaz);
+			AliasActions addAction = AliasActions.add().index(newName).alias(aliaz);
+			IndicesAliasesRequest actions = new IndicesAliasesRequest().
+					addAliasAction(removeAction).addAliasAction(addAction);
 			if (deleteOld) {
-				deleteIndex(oldName);
+				actions.addAliasAction(AliasActions.removeIndex().index(oldName));
+			}
+			if (USE_TRANSPORT_CLIENT) {
+				getTransportClient().admin().indices().aliases(actions).actionGet();
+			} else {
+				getRESTClient().indices().updateAliases(actions);
 			}
 		} catch (Exception e) {
 			logger.error(null, e);
@@ -573,10 +675,22 @@ public final class ElasticSearchUtils {
 			return appid;
 		}
 		try {
-			GetIndexResponse result = getClient().admin().indices().prepareGetIndex().
-					setIndices(appid).execute().actionGet();
-			if (result.indices() != null && result.indices().length > 0) {
-				return result.indices()[0];
+			if (USE_TRANSPORT_CLIENT) {
+				GetIndexResponse result = getTransportClient().admin().indices().prepareGetIndex().
+						setIndices(appid).execute().actionGet();
+				if (result.indices() != null && result.indices().length > 0) {
+					return result.indices()[0];
+				}
+			} else {
+				String path = "/" + appid;
+				Response resp = getRESTClient().getLowLevelClient().performRequest("GET", path);
+				HttpEntity entity = resp.getEntity();
+				if (entity != null && entity.getContent() != null) {
+					JsonNode tree = ParaObjectUtils.getJsonMapper().readTree(entity.getContent());
+					if (!tree.isMissingNode() && tree.isObject()) {
+						return tree.fieldNames().next();
+					}
+				}
 			}
 		} catch (Exception e) {
 			logger.error(null, e);
@@ -605,12 +719,12 @@ public final class ElasticSearchUtils {
 			public void onResponse(T response) {
 				int status = response.status().getStatus();
 				if (status >= 400) {
-					logger.warn("Indexing object {}/{} might have failed - status {}.",
+					logger.warn("Indexing/unindexing object {}/{} might have failed - status {}.",
 							response.getIndex(), response.getId(), status);
 				}
 			}
 			public void onFailure(Exception e) {
-				logger.error("Indexing failure: {}", e);
+				logger.error("Indexing/unindexing failure: {}", e);
 			}
 		};
 	}
@@ -623,12 +737,12 @@ public final class ElasticSearchUtils {
 			public void onResponse(BulkResponse response) {
 				int status = response.status().getStatus();
 				if (response.hasFailures() || status >= 400) {
-					logger.warn("Indexing objects in bulk might have failed - status {}. Reason: {}",
+					logger.warn("Bulk operation might have failed - status {}. Reason: {}",
 							status, response.buildFailureMessage());
 				}
 			}
 			public void onFailure(Exception e) {
-				logger.error("Bulk indexing failure: {}", e);
+				logger.error("Bulk failure: {}", e);
 			}
 		};
 	}
@@ -638,8 +752,25 @@ public final class ElasticSearchUtils {
 	 * @return false if status is red
 	 */
 	public static boolean isClusterOK() {
-		return !getClient().admin().cluster().prepareClusterStats().execute().actionGet().
-				getStatus().equals(ClusterHealthStatus.RED);
+		try {
+			if (USE_TRANSPORT_CLIENT) {
+				return !getTransportClient().admin().cluster().prepareClusterStats().execute().actionGet().
+						getStatus().equals(ClusterHealthStatus.RED);
+			} else {
+				String path = "/_cluster/health";
+				Response resp = getRESTClient().getLowLevelClient().performRequest("GET", path);
+				HttpEntity entity = resp.getEntity();
+				if (entity != null && entity.getContent() != null) {
+					JsonNode health = ParaObjectUtils.getJsonMapper().readTree(entity.getContent());
+					if (!health.isMissingNode() && health.isObject()) {
+						return !ClusterHealthStatus.RED.toString().equalsIgnoreCase(health.get("status").asText());
+					}
+				}
+			}
+		} catch (Exception e) {
+			logger.error(null, e);
+		}
+		return false;
 	}
 
 	/**
@@ -879,6 +1010,8 @@ public final class ElasticSearchUtils {
 	}
 
 	/**
+	 * Convert a normal query string query to one which supports nested fields.
+	 * Reference: https://github.com/elastic/elasticsearch/issues/11322
 	 * @param query query string
 	 * @return a list of composite queries for matching nested objects
 	 */
@@ -1128,5 +1261,69 @@ public final class ElasticSearchUtils {
 	 */
 	static String getIndexNameWithWildcard(String indexName) {
 		return StringUtils.contains(indexName, "_") ? indexName : indexName + "_*"; // ES v6
+	}
+
+	/**
+	 * Intercepts and signs requests to AWS Elasticsearch endpoints.
+	 * @param endpoint the ES endpoint URI
+	 * @return a client callback containing the interceptor
+	 */
+	static RestClientBuilder.HttpClientConfigCallback getAWSRequestSigningInterceptor(String endpoint) {
+		return (HttpAsyncClientBuilder httpClientBuilder) -> {
+			httpClientBuilder.addInterceptorLast(new HttpResponseInterceptor() {
+				@Override
+				public void process(HttpResponse response, HttpContext context) throws HttpException, IOException {
+					logger.info("RESP: {}", response.getStatusLine().getStatusCode());
+				}
+			});
+			httpClientBuilder.addInterceptorLast((HttpRequest request, HttpContext context) -> {
+				Signer signer = new Signer();
+				signer.setServiceName("es"); // null = autodetect
+				signer.setRegionName(Config.AWS_REGION); // null = autodetect
+				AWSCredentials credentials;
+				URIBuilder uriBuilder;
+				String httpMethod = request.getRequestLine().getMethod();
+				String resourcePath;
+				Map<String, String> headers = new HashMap<>(request.getAllHeaders().length + 1);
+				Map<String, String> params = new HashMap<>();
+				InputStream entity = null;
+
+				try {
+					if (StringUtils.isBlank(Config.AWS_ACCESSKEY)) {
+						credentials = new BasicAWSCredentials(Config.AWS_ACCESSKEY, Config.AWS_SECRETKEY);
+					} else {
+						credentials = DefaultAWSCredentialsProviderChain.getInstance().getCredentials();
+					}
+
+					for (Header header : request.getAllHeaders()) {
+						headers.put(header.getName(), header.getValue());
+					}
+
+					uriBuilder = new URIBuilder(request.getRequestLine().getUri());
+					resourcePath = uriBuilder.getPath();
+
+					for (NameValuePair param : uriBuilder.getQueryParams()) {
+						params.put(param.getName(), param.getValue());
+					}
+
+					if (request instanceof HttpEntityEnclosingRequest) {
+						HttpEntity body = ((HttpEntityEnclosingRequest) request).getEntity();
+						if (body != null) {
+							entity = body.getContent();
+						}
+					}
+
+					Map<String, String> signed = signer.sign(httpMethod, endpoint, resourcePath, headers, params, entity,
+							credentials.getAWSAccessKeyId(), credentials.getAWSSecretKey());
+
+					for (Entry<String, String> header : signed.entrySet()) {
+						request.setHeader(header.getKey(), header.getValue());
+					}
+				} catch (Exception ex) {
+					logger.error("Failed to sign request to AWS Elasticsearch:", ex);
+				}
+			});
+			return httpClientBuilder;
+		};
 	}
 }

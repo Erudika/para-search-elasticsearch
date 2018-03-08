@@ -17,7 +17,7 @@ This plugin allows you to use Elasticsearch as the search engine for Para.
 
 ## Features
 
-- Implements `Search` interface using `TransportClient`
+- Implements `Search` interface and supports both transport and high level clients
 - Implements `DAO` interface so you can use Elasticsearch as a database (avoid in production!)
 - Index sharing and multitenancy support through alias routing and filtering
 - Full pagination support for both "search-after" and "from-size" modes
@@ -59,12 +59,13 @@ para.es.auto_expand_replicas = "0-1"
 para.es.use_transportclient = false
 para.es.transportclient_host = "localhost"
 para.es.transportclient_port = 9300
-# proxy settings
-para.es.proxy_enabled = false
-para.es.proxy_path = "_elasticsearch"
 para.es.restclient_scheme = "http"
 para.es.restclient_host = "localhost"
 para.es.restclient_port = 9200
+para.es.sign_requests_to_aws = false
+# proxy settings
+para.es.proxy_enabled = false
+para.es.proxy_path = "_elasticsearch"
 ```
 
 Finally, set the config property:
