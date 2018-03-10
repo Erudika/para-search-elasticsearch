@@ -17,22 +17,26 @@
  */
 package com.erudika.para.search;
 
+import com.amazonaws.AmazonWebServiceRequest;
+import com.amazonaws.DefaultRequest;
+import com.amazonaws.Request;
+import com.amazonaws.auth.AWS4Signer;
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
+import com.amazonaws.http.HttpMethodName;
 import com.erudika.para.core.App;
 import com.erudika.para.core.ParaObject;
 import com.erudika.para.core.Sysprop;
 import com.erudika.para.core.utils.ParaObjectUtils;
 import com.erudika.para.persistence.DAO;
-import com.erudika.para.rest.Signer;
 import com.erudika.para.utils.Config;
 import com.erudika.para.utils.Pager;
 import com.erudika.para.utils.Utils;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.InetAddress;
+import java.net.URI;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -48,11 +52,8 @@ import org.apache.commons.lang3.math.NumberUtils;
 import org.apache.http.Header;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpEntityEnclosingRequest;
-import org.apache.http.HttpException;
 import org.apache.http.HttpHost;
 import org.apache.http.HttpRequest;
-import org.apache.http.HttpResponse;
-import org.apache.http.HttpResponseInterceptor;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.utils.URIBuilder;
 import org.apache.http.impl.nio.client.HttpAsyncClientBuilder;
@@ -649,17 +650,18 @@ public final class ElasticSearchUtils {
 			String oldName = oldIndex.trim();
 			String newName = newIndex.trim();
 			logger.info("Switching index aliases {}->{}, deleting '{}': {}", aliaz, newIndex, oldIndex, deleteOld);
-			AliasActions removeAction = AliasActions.removeIndex().index(oldName).alias(aliaz);
+			AliasActions removeAction = AliasActions.remove().index(oldName).alias(aliaz);
 			AliasActions addAction = AliasActions.add().index(newName).alias(aliaz);
 			IndicesAliasesRequest actions = new IndicesAliasesRequest().
 					addAliasAction(removeAction).addAliasAction(addAction);
-			if (deleteOld) {
-				actions.addAliasAction(AliasActions.removeIndex().index(oldName));
-			}
 			if (USE_TRANSPORT_CLIENT) {
 				getTransportClient().admin().indices().aliases(actions).actionGet();
 			} else {
 				getRESTClient().indices().updateAliases(actions);
+			}
+			// delete the old index
+			if (deleteOld) {
+				deleteIndex(oldName);
 			}
 		} catch (Exception e) {
 			logger.error(null, e);
@@ -866,6 +868,9 @@ public final class ElasticSearchUtils {
 	static boolean isValidQueryString(String query) {
 		if (StringUtils.isBlank(query)) {
 			return false;
+		}
+		if ("*".equals(query.trim())) {
+			return true;
 		}
 		try {
 			StandardQueryParser parser = new StandardQueryParser();
@@ -1279,59 +1284,72 @@ public final class ElasticSearchUtils {
 	}
 
 	/**
+	 * @return the AWS region for use with AWS ES.
+	 */
+	static String getRegion() {
+		return Config.getConfigParam("es.aws_region", Config.getConfigParam("AWS_REGION", Config.AWS_REGION));
+	}
+
+	/**
 	 * Intercepts and signs requests to AWS Elasticsearch endpoints.
 	 * @param endpoint the ES endpoint URI
 	 * @return a client callback containing the interceptor
 	 */
 	static RestClientBuilder.HttpClientConfigCallback getAWSRequestSigningInterceptor(String endpoint) {
 		return (HttpAsyncClientBuilder httpClientBuilder) -> {
-			httpClientBuilder.addInterceptorLast(new HttpResponseInterceptor() {
-				@Override
-				public void process(HttpResponse response, HttpContext context) throws HttpException, IOException {
-					logger.info("RESP: {}", response.getStatusLine().getStatusCode());
-				}
-			});
 			httpClientBuilder.addInterceptorLast((HttpRequest request, HttpContext context) -> {
-				Signer signer = new Signer();
-				signer.setServiceName("es"); // null = autodetect
-				signer.setRegionName(Config.AWS_REGION); // null = autodetect
+				AWS4Signer signer = new AWS4Signer();
+				signer.setServiceName("es");
+				signer.setRegionName(getRegion());
 				AWSCredentials credentials;
 				URIBuilder uriBuilder;
 				String httpMethod = request.getRequestLine().getMethod();
 				String resourcePath;
 				Map<String, String> headers = new HashMap<>(request.getAllHeaders().length + 1);
 				Map<String, String> params = new HashMap<>();
-				InputStream entity = null;
 
 				try {
 					if (StringUtils.isBlank(Config.AWS_ACCESSKEY)) {
-						credentials = new BasicAWSCredentials(Config.AWS_ACCESSKEY, Config.AWS_SECRETKEY);
-					} else {
 						credentials = DefaultAWSCredentialsProviderChain.getInstance().getCredentials();
+					} else {
+						credentials = new BasicAWSCredentials(Config.AWS_ACCESSKEY, Config.AWS_SECRETKEY);
 					}
 
-					for (Header header : request.getAllHeaders()) {
-						headers.put(header.getName(), header.getValue());
+					Request<AmazonWebServiceRequest> r = new DefaultRequest<>(signer.getServiceName());
+					if (!StringUtils.isBlank(httpMethod)) {
+						r.setHttpMethod(HttpMethodName.valueOf(httpMethod));
 					}
+
+					r.setEndpoint(URI.create(endpoint));
 
 					uriBuilder = new URIBuilder(request.getRequestLine().getUri());
 					resourcePath = uriBuilder.getPath();
+					if (!StringUtils.isBlank(resourcePath)) {
+						r.setResourcePath(resourcePath);
+					}
 
 					for (NameValuePair param : uriBuilder.getQueryParams()) {
-						params.put(param.getName(), param.getValue());
+						r.addParameter(param.getName(), param.getValue());
 					}
 
 					if (request instanceof HttpEntityEnclosingRequest) {
 						HttpEntity body = ((HttpEntityEnclosingRequest) request).getEntity();
 						if (body != null) {
-							entity = body.getContent();
+							r.setContent(body.getContent());
 						}
 					}
+					if (r.getContent() == null) {
+						request.removeHeaders("Content-Length");
+					}
 
-					Map<String, String> signed = signer.sign(httpMethod, endpoint, resourcePath, headers, params, entity,
-							credentials.getAWSAccessKeyId(), credentials.getAWSSecretKey());
+					for (Header header : request.getAllHeaders()) {
+						headers.put(header.getName(), header.getValue());
+					}
+					r.setHeaders(headers);
 
-					for (Entry<String, String> header : signed.entrySet()) {
+					signer.sign(r, credentials);
+
+					for (Entry<String, String> header : r.getHeaders().entrySet()) {
 						request.setHeader(header.getKey(), header.getValue());
 					}
 				} catch (Exception ex) {
