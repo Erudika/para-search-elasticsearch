@@ -22,6 +22,7 @@ This plugin allows you to use Elasticsearch as the search engine for Para.
 - Index sharing and multitenancy support through alias routing and filtering
 - Full pagination support for both "search-after" and "from-size" modes
 - Proxy endpoint `/v1/_elasticsearch` - relays all requests directly to Elasticsearch (disabled by default)
+- Supports AWS Elasticsearch Service with request signing
 
 ## Documentation
 
@@ -63,6 +64,7 @@ para.es.restclient_scheme = "http"
 para.es.restclient_host = "localhost"
 para.es.restclient_port = 9200
 para.es.sign_requests_to_aws = false
+para.es.aws_region = "eu-west-1"
 # proxy settings
 para.es.proxy_enabled = false
 para.es.proxy_path = "_elasticsearch"
