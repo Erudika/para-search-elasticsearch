@@ -22,7 +22,6 @@ import com.amazonaws.DefaultRequest;
 import com.amazonaws.Request;
 import com.amazonaws.auth.AWS4Signer;
 import com.amazonaws.auth.AWSCredentials;
-import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.http.HttpMethodName;
 import com.erudika.para.core.App;
@@ -1284,13 +1283,6 @@ public final class ElasticSearchUtils {
 	}
 
 	/**
-	 * @return the AWS region for use with AWS ES.
-	 */
-	static String getRegion() {
-		return Config.getConfigParam("es.aws_region", Config.getConfigParam("AWS_REGION", Config.AWS_REGION));
-	}
-
-	/**
 	 * Intercepts and signs requests to AWS Elasticsearch endpoints.
 	 * @param endpoint the ES endpoint URI
 	 * @return a client callback containing the interceptor
@@ -1300,8 +1292,8 @@ public final class ElasticSearchUtils {
 			httpClientBuilder.addInterceptorLast((HttpRequest request, HttpContext context) -> {
 				AWS4Signer signer = new AWS4Signer();
 				signer.setServiceName("es");
-				signer.setRegionName(getRegion());
-				AWSCredentials credentials;
+				signer.setRegionName(Config.getConfigParam("es.aws_region", Config.AWS_REGION));
+				AWSCredentials credentials = DefaultAWSCredentialsProviderChain.getInstance().getCredentials();
 				URIBuilder uriBuilder;
 				String httpMethod = request.getRequestLine().getMethod();
 				String resourcePath;
@@ -1309,12 +1301,6 @@ public final class ElasticSearchUtils {
 				Map<String, String> params = new HashMap<>();
 
 				try {
-					if (StringUtils.isBlank(Config.AWS_ACCESSKEY)) {
-						credentials = DefaultAWSCredentialsProviderChain.getInstance().getCredentials();
-					} else {
-						credentials = new BasicAWSCredentials(Config.AWS_ACCESSKEY, Config.AWS_SECRETKEY);
-					}
-
 					Request<AmazonWebServiceRequest> r = new DefaultRequest<>(signer.getServiceName());
 					if (!StringUtils.isBlank(httpMethod)) {
 						r.setHttpMethod(HttpMethodName.valueOf(httpMethod));
