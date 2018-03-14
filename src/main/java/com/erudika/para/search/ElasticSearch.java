@@ -113,39 +113,7 @@ public class ElasticSearch implements Search {
 	 * No-args constructor.
 	 */
 	public ElasticSearch() {
-		if (Config.isSearchEnabled()) {
-			ElasticSearchUtils.initClient();
-		}
-		// set up automatic index creation and deletion
-		App.addAppCreatedListener(new AppCreatedListener() {
-			public void onAppCreated(App app) {
-				if (app != null) {
-					String appid = app.getAppIdentifier();
-					if (app.isSharingIndex()) {
-						ElasticSearchUtils.addIndexAliasWithRouting(Config.getRootAppIdentifier(), appid);
-					} else {
-						int	shards = app.isRootApp() ? Config.getConfigInt("es.shards", 5) :
-								Config.getConfigInt("es.shards_for_child_apps", 2);
-						int	replicas = app.isRootApp() ? Config.getConfigInt("es.replicas", 0) :
-								Config.getConfigInt("es.replicas_for_child_apps", 0);
-						ElasticSearchUtils.createIndex(appid, shards, replicas);
-					}
-				}
-			}
-		});
-		App.addAppDeletedListener(new AppDeletedListener() {
-			public void onAppDeleted(App app) {
-				if (app != null) {
-					String appid = app.getAppIdentifier();
-					if (app.isSharingIndex()) {
-						CoreUtils.getInstance().getSearch().unindexAll(appid, null, true);
-						ElasticSearchUtils.removeIndexAlias(Config.getRootAppIdentifier(), appid);
-					} else {
-						ElasticSearchUtils.deleteIndex(appid);
-					}
-				}
-			}
-		});
+		this(CoreUtils.getInstance().getDao());
 	}
 
 	/**
@@ -155,6 +123,39 @@ public class ElasticSearch implements Search {
 	@Inject
 	public ElasticSearch(DAO dao) {
 		this.dao = dao;
+		if (Config.isSearchEnabled()) {
+			ElasticSearchUtils.initClient();
+			// set up automatic index creation and deletion
+			App.addAppCreatedListener(new AppCreatedListener() {
+				public void onAppCreated(App app) {
+					if (app != null) {
+						String appid = app.getAppIdentifier();
+						if (app.isSharingIndex()) {
+							ElasticSearchUtils.addIndexAliasWithRouting(Config.getRootAppIdentifier(), appid);
+						} else {
+							int shards = app.isRootApp() ? Config.getConfigInt("es.shards", 5)
+									: Config.getConfigInt("es.shards_for_child_apps", 2);
+							int replicas = app.isRootApp() ? Config.getConfigInt("es.replicas", 0)
+									: Config.getConfigInt("es.replicas_for_child_apps", 0);
+							ElasticSearchUtils.createIndex(appid, shards, replicas);
+						}
+					}
+				}
+			});
+			App.addAppDeletedListener(new AppDeletedListener() {
+				public void onAppDeleted(App app) {
+					if (app != null) {
+						String appid = app.getAppIdentifier();
+						if (app.isSharingIndex()) {
+							CoreUtils.getInstance().getSearch().unindexAll(appid, null, true);
+							ElasticSearchUtils.removeIndexAlias(Config.getRootAppIdentifier(), appid);
+						} else {
+							ElasticSearchUtils.deleteIndex(appid);
+						}
+					}
+				}
+			});
+		}
 	}
 
 	private DAO getDAO() {
