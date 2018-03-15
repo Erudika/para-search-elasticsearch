@@ -44,6 +44,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.apache.commons.lang3.StringUtils;
@@ -420,7 +421,9 @@ public final class ElasticSearchUtils {
 	 * @return true if successful, false if index doesn't exist or failed.
 	 */
 	public static boolean rebuildIndex(DAO dao, App app, Pager... pager) {
-		if (app == null || StringUtils.isBlank(app.getAppIdentifier()) || dao == null) {
+		Objects.requireNonNull(dao, "DAO object cannot be null!");
+		Objects.requireNonNull(app, "App object cannot be null!");
+		if (StringUtils.isBlank(app.getAppIdentifier())) {
 			return false;
 		}
 		try {
