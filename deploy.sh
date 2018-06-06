@@ -1,12 +1,13 @@
 #!/bin/bash
-echo "Listing all tags:"
-git tag
+lastver=$(git describe --abbrev=0 --tags)
+echo "Last tag was: $lastver"
 echo "---"
-read -e -p "Version tag: " ver
-read -e -p "Last version tag: " lastver
+read -e -p "New version: " ver
 read -e -p "New dev version: " devver
 
-git add -A && git commit -m "Release v$ver." && git push origin master
+sed -i -e "s/PARA_PLUGIN_VER=.*/PARA_PLUGIN_VER="\"$ver\""/g" Dockerfile && \
+
+git add -A && git commit -m "Release v$ver." && git push origin master && \
 mvn --batch-mode -Dtag=${ver} release:prepare -DreleaseVersion=${ver} -DdevelopmentVersion=${devver}-SNAPSHOT && \
 mvn release:perform && \
 echo "Maven release done, publishing release on GitHub..," && \
