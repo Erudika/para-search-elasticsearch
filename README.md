@@ -185,6 +185,11 @@ and returns a response indicating the number of reindexed objects and the elapse
 }
 ```
 
+Additionally, you can specify the destination index to reindex into, which must have been created beforehand:
+```
+POST /v1/_elasticsearch/reindex?destinationIndex=yourCustomIndex
+```
+
 ### Shared indices with alias routing
 
 The plugin also supports index sharing, whereby the root app index is shared with other apps which are created with the
