@@ -132,7 +132,7 @@
 				<configuration>
 					<skip>${skipITs}</skip>
 					<!--<autoCreateIndex>false</autoCreateIndex>-->
-					<!-- BUG https://github.com/alexcojocaru/elasticsearch-maven-plugin/issues/65 -->
+					<!-- BUG WITH 6.3.0 - https://github.com/alexcojocaru/elasticsearch-maven-plugin/issues/65 -->
 					<version>6.2.4</version>
 					<!--<version>${elasticsearch.version}</version>-->
 					<clusterName>test</clusterName>
