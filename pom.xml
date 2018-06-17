@@ -55,15 +55,15 @@
 		<skipTests>false</skipTests>
 		<skipITs>${skipTests}</skipITs>
 		<skipUTs>${skipTests}</skipUTs>
-		<elasticsearch.version>6.2.4</elasticsearch.version>
-		<jerseyVer>2.26</jerseyVer>
+		<elasticsearch.version>6.3.0</elasticsearch.version>
+		<jerseyVer>2.27</jerseyVer>
 	</properties>
 
 	<dependencies>
 		<dependency>
 			<groupId>com.erudika</groupId>
 			<artifactId>para-core</artifactId>
-			<version>1.29.1</version>
+			<version>1.29.2</version>
 			<scope>provided</scope>
 		</dependency>
 		<dependency>
@@ -128,14 +128,17 @@
 			<plugin>
 				<groupId>com.github.alexcojocaru</groupId>
 				<artifactId>elasticsearch-maven-plugin</artifactId>
-				<version>6.4</version>
+				<version>6.5</version>
 				<configuration>
 					<skip>${skipITs}</skip>
-					<autoCreateIndex>false</autoCreateIndex>
-					<version>${elasticsearch.version}</version>
+					<!--<autoCreateIndex>false</autoCreateIndex>-->
+					<!-- BUG https://github.com/alexcojocaru/elasticsearch-maven-plugin/issues/65 -->
+					<version>6.2.4</version>
+					<!--<version>${elasticsearch.version}</version>-->
 					<clusterName>test</clusterName>
 					<tcpPort>9300</tcpPort>
 					<httpPort>9200</httpPort>
+					<instanceCount>1</instanceCount>
 				</configuration>
 				<executions>
 					<execution>
@@ -158,7 +161,7 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-shade-plugin</artifactId>
-				<version>3.1.0</version>
+				<version>3.1.1</version>
 				<executions>
 					<execution>
 						<phase>package</phase>
@@ -263,7 +266,7 @@
 			<plugin>
 				<groupId>org.codehaus.mojo</groupId>
 				<artifactId>sonar-maven-plugin</artifactId>
-				<version>3.3.0.603</version>
+				<version>3.4.0.905</version>
 			</plugin>
 		</plugins>
 	</build>
