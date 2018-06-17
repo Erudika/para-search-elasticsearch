@@ -119,7 +119,7 @@ public class ProxyResourceHandler implements CustomResourceHandler {
 		String path = getCleanPath(appid, getPath(ctx));
 		try {
 			if (path.endsWith("/reindex") && POST.equals(method)) {
-				return handleReindexTask(appid);
+				return handleReindexTask(appid, ctx.getUriInfo().getQueryParameters().getFirst("destinationIndex"));
 			}
 
 			Header[] headers = getHeaders(ctx.getHeaders());
@@ -213,7 +213,7 @@ public class ProxyResourceHandler implements CustomResourceHandler {
 		return "/".concat(appid).concat("/").concat(path);
 	}
 
-	private Response handleReindexTask(String appid) {
+	private Response handleReindexTask(String appid, String destinationIndex) {
 		if (!Config.getConfigBoolean("es.proxy_reindexing_enabled", false) || appid == null) {
 			return Response.status(Response.Status.FORBIDDEN.getStatusCode(), "This feature is disabled.").build();
 		}
@@ -222,7 +222,7 @@ public class ProxyResourceHandler implements CustomResourceHandler {
 		App app = dao.read(App.id(appid));
 		if (app != null) {
 			long startTime = System.nanoTime();
-			ElasticSearchUtils.rebuildIndex(dao, app, pager);
+			ElasticSearchUtils.rebuildIndex(dao, app, destinationIndex, pager);
 			long tookMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startTime);
 			Map<String, Object> response = new HashMap<String, Object>();
 			response.put("reindexed", pager.getCount());

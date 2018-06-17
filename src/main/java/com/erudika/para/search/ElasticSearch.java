@@ -147,7 +147,7 @@ public class ElasticSearch implements Search {
 					if (app != null) {
 						String appid = app.getAppIdentifier();
 						if (app.isSharingIndex()) {
-							CoreUtils.getInstance().getSearch().unindexAll(appid, null, true);
+							// no need to manually cleanup the documents here - this is done in the DAO layer
 							ElasticSearchUtils.removeIndexAlias(Config.getRootAppIdentifier(), appid);
 						} else {
 							ElasticSearchUtils.deleteIndex(appid);
@@ -178,8 +178,9 @@ public class ElasticSearch implements Search {
 		if (po == null || StringUtils.isBlank(appid)) {
 			return;
 		}
+		ActionListener<IndexResponse> listener = ElasticSearchUtils.
+				getIndexResponseHandler(null, ex -> ElasticSearchUtils.handleFailedIndexing(dao, appid, po));
 		try {
-			ActionListener<IndexResponse> listener = ElasticSearchUtils.getIndexResponseHandler();
 			IndexRequest indexRequest = new IndexRequest(getIndexName(appid), getType(), po.getId()).
 					source(ElasticSearchUtils.getSourceFromParaObject(po));
 			if (USE_TRANSPORT_CLIENT) {
@@ -198,6 +199,7 @@ public class ElasticSearch implements Search {
 			logger.debug("Search.index() {}", po.getId());
 		} catch (Exception e) {
 			logger.warn(null, e);
+			listener.onFailure(e);
 		}
 	}
 
@@ -233,16 +235,31 @@ public class ElasticSearch implements Search {
 		if (StringUtils.isBlank(appid) || objects == null || objects.isEmpty()) {
 			return;
 		}
+		BulkRequest bulk = new BulkRequest();
+		for (ParaObject po : objects) {
+			bulk.add(new IndexRequest(getIndexName(appid), getType(), po.getId()).
+					source(ElasticSearchUtils.getSourceFromParaObject(po)));
+		}
+		ActionListener<BulkResponse> listener = ElasticSearchUtils.getBulkIndexResponseHandler(null,
+				ex -> ElasticSearchUtils.handleFailedBulkIndexing(dao, appid, objects));
 		try {
-			BulkRequest bulk = new BulkRequest();
-			for (ParaObject po : objects) {
-				bulk.add(new IndexRequest(getIndexName(appid), getType(), po.getId()).
-						source(ElasticSearchUtils.getSourceFromParaObject(po)));
+			if (USE_TRANSPORT_CLIENT) {
+				if (isAsyncEnabled()) {
+					transportClient().bulk(bulk, listener);
+				} else {
+					listener.onResponse(transportClient().bulk(bulk).actionGet());
+				}
+			} else {
+				if (isAsyncEnabled()) {
+					restClient().bulkAsync(bulk, listener);
+				} else {
+					listener.onResponse(restClient().bulk(bulk));
+				}
 			}
-			bulkRequest(bulk);
 			logger.debug("Search.indexAll() {}", objects.size());
 		} catch (Exception e) {
 			logger.warn(null, e);
+			listener.onFailure(e);
 		}
 	}
 
@@ -776,7 +793,12 @@ public class ElasticSearch implements Search {
 
 	@Override
 	public boolean rebuildIndex(DAO dao, App app, Pager... pager) {
-		return ElasticSearchUtils.rebuildIndex(dao, app, pager);
+		return ElasticSearchUtils.rebuildIndex(dao, app, null, pager);
+	}
+
+	@Override
+	public boolean rebuildIndex(DAO dao, App app, String destinationIndex, Pager... pager) {
+		return ElasticSearchUtils.rebuildIndex(dao, app, destinationIndex, pager);
 	}
 
 	@Override
