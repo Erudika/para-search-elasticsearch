@@ -796,13 +796,8 @@ public final class ElasticSearchUtils {
 	 * @param po Para object
 	 */
 	public static void handleFailedIndexing(DAO dao, String appid, ParaObject po) {
-		boolean undo = Config.getConfigBoolean("es.undo_write_on_indexing_errors", false);
-		if (undo) {
-			dao.delete(appid, po);
-		}
 		if (Config.getConfigBoolean("es.fail_on_indexing_errors", false)) {
-			throw new RuntimeException("Failed to index object. "
-					+ (undo ? "The object " + po.getId() + " was deleted from the data store." : ""));
+			throw new RuntimeException("Failed to index object " + po.getId() + "!");
 		}
 	}
 
@@ -813,13 +808,8 @@ public final class ElasticSearchUtils {
 	 * @param objects list of Para objects
 	 */
 	public static <P extends Object & ParaObject> void handleFailedBulkIndexing(DAO dao, String appid, List<P> objects) {
-		boolean undo = Config.getConfigBoolean("es.undo_write_on_indexing_errors", false);
-		if (undo) {
-			dao.deleteAll(appid, objects);
-		}
 		if (Config.getConfigBoolean("es.fail_on_indexing_errors", false)) {
-			throw new RuntimeException("Failed to index objects. "
-					+ (undo ? objects.size() + " objects wer deleted from the data store." : ""));
+			throw new RuntimeException("Failed to index " + objects.size() + " objects!");
 		}
 	}
 

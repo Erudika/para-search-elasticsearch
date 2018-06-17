@@ -65,7 +65,6 @@ para.es.restclient_host = "localhost"
 para.es.restclient_port = 9200
 para.es.sign_requests_to_aws = false
 para.es.aws_region = "eu-west-1"
-para.es.undo_write_on_indexing_errors = false
 para.es.fail_on_indexing_errors = false
 
 # proxy settings
