@@ -156,35 +156,7 @@ public class ElasticSearch implements Search {
 		return dao;
 	}
 
-	@Override
-	public void index(String appid, ParaObject po) {
-		if (po == null || StringUtils.isBlank(appid)) {
-			return;
-		}
-		try {
-			executeRequests(Collections.singletonList(new IndexRequest(getIndexName(appid), getType(), po.getId()).
-					source(ElasticSearchUtils.getSourceFromParaObject(po))));
-			logger.debug("Search.index() {}", po.getId());
-		} catch (Exception e) {
-			logger.warn(null, e);
-		}
-	}
-
-	@Override
-	public void unindex(String appid, ParaObject po) {
-		if (po == null || StringUtils.isBlank(po.getId()) || StringUtils.isBlank(appid)) {
-			return;
-		}
-		try {
-			executeRequests(Collections.singletonList(new DeleteRequest(getIndexName(appid), getType(), po.getId())));
-			logger.debug("Search.unindex() {}", po.getId());
-		} catch (Exception e) {
-			logger.warn(null, e);
-		}
-	}
-
-	@Override
-	public <P extends ParaObject> void indexAll(String appid, List<P> objects) {
+	private <P extends ParaObject> void indexAllInternal(String appid, List<P> objects) {
 		if (StringUtils.isBlank(appid) || objects == null || objects.isEmpty()) {
 			return;
 		}
@@ -200,8 +172,7 @@ public class ElasticSearch implements Search {
 		}
 	}
 
-	@Override
-	public <P extends ParaObject> void unindexAll(String appid, List<P> objects) {
+	private <P extends ParaObject> void unindexAllInternal(String appid, List<P> objects) {
 		if (StringUtils.isBlank(appid) || objects == null || objects.isEmpty()) {
 			return;
 		}
@@ -216,8 +187,7 @@ public class ElasticSearch implements Search {
 		}
 	}
 
-	@Override
-	public void unindexAll(String appid, Map<String, ?> terms, boolean matchAll) {
+	private void unindexAllInternal(String appid, Map<String, ?> terms, boolean matchAll) {
 		if (StringUtils.isBlank(appid)) {
 			return;
 		}
@@ -273,8 +243,7 @@ public class ElasticSearch implements Search {
 		}
 	}
 
-	@Override
-	public <P extends ParaObject> P findById(String appid, String id) {
+	private <P extends ParaObject> P findByIdInternal(String appid, String id) {
 		try {
 			return ElasticSearchUtils.getParaObjectFromSource(getSource(appid, id));
 		} catch (Exception e) {
@@ -283,9 +252,8 @@ public class ElasticSearch implements Search {
 		}
 	}
 
-	@Override
 	@SuppressWarnings("unchecked")
-	public <P extends ParaObject> List<P> findByIds(String appid, List<String> ids) {
+	private <P extends ParaObject> List<P> findByIdsInternal(String appid, List<String> ids) {
 		List<P> list = new LinkedList<P>();
 		if (ids == null || ids.isEmpty()) {
 			return list;
@@ -299,8 +267,7 @@ public class ElasticSearch implements Search {
 		return list;
 	}
 
-	@Override
-	public <P extends ParaObject> List<P> findTermInList(String appid, String type,
+	private <P extends ParaObject> List<P> findTermInListInternal(String appid, String type,
 			String field, List<?> terms, Pager... pager) {
 		if (StringUtils.isBlank(field) || terms == null) {
 			return Collections.emptyList();
@@ -320,8 +287,7 @@ public class ElasticSearch implements Search {
 		return searchQuery(appid, type, qb, pager);
 	}
 
-	@Override
-	public <P extends ParaObject> List<P> findPrefix(String appid, String type,
+	private <P extends ParaObject> List<P> findPrefixInternal(String appid, String type,
 			String field, String prefix, Pager... pager) {
 		if (StringUtils.isBlank(field) || StringUtils.isBlank(prefix)) {
 			return Collections.emptyList();
@@ -335,8 +301,7 @@ public class ElasticSearch implements Search {
 		return searchQuery(appid, type, qb, pager);
 	}
 
-	@Override
-	public <P extends ParaObject> List<P> findQuery(String appid, String type,
+	private <P extends ParaObject> List<P> findQueryInternal(String appid, String type,
 			String query, Pager... pager) {
 		if (StringUtils.isBlank(query)) {
 			return Collections.emptyList();
@@ -355,8 +320,7 @@ public class ElasticSearch implements Search {
 		return searchQuery(appid, type, qb, pager);
 	}
 
-	@Override
-	public <P extends ParaObject> List<P> findNestedQuery(String appid, String type, String field,
+	private <P extends ParaObject> List<P> findNestedQueryInternal(String appid, String type, String field,
 			String query, Pager... pager) {
 		if (StringUtils.isBlank(query) || StringUtils.isBlank(field)) {
 			return Collections.emptyList();
@@ -366,8 +330,7 @@ public class ElasticSearch implements Search {
 		return searchQuery(appid, type, qb, pager);
 	}
 
-	@Override
-	public <P extends ParaObject> List<P> findWildcard(String appid, String type,
+	private <P extends ParaObject> List<P> findWildcardInternal(String appid, String type,
 			String field, String wildcard, Pager... pager) {
 		if (StringUtils.isBlank(field) || StringUtils.isBlank(wildcard)) {
 			return Collections.emptyList();
@@ -381,8 +344,7 @@ public class ElasticSearch implements Search {
 		return searchQuery(appid, type, qb, pager);
 	}
 
-	@Override
-	public <P extends ParaObject> List<P> findTagged(String appid, String type,
+	private <P extends ParaObject> List<P> findTaggedInternal(String appid, String type,
 			String[] tags, Pager... pager) {
 		if (tags == null || tags.length == 0 || StringUtils.isBlank(appid)) {
 			return Collections.emptyList();
@@ -397,9 +359,8 @@ public class ElasticSearch implements Search {
 		return searchQuery(appid, type, tagFilter, pager);
 	}
 
-	@Override
 	@SuppressWarnings("unchecked")
-	public <P extends ParaObject> List<P> findTerms(String appid, String type,
+	private <P extends ParaObject> List<P> findTermsInternal(String appid, String type,
 			Map<String, ?> terms, boolean mustMatchAll, Pager... pager) {
 		if (terms == null || terms.isEmpty()) {
 			return Collections.emptyList();
@@ -414,8 +375,7 @@ public class ElasticSearch implements Search {
 		}
 	}
 
-	@Override
-	public <P extends ParaObject> List<P> findSimilar(String appid, String type, String filterKey,
+	private <P extends ParaObject> List<P> findSimilarInternal(String appid, String type, String filterKey,
 			String[] fields, String liketext, Pager... pager) {
 		if (StringUtils.isBlank(liketext)) {
 			return Collections.emptyList();
@@ -447,8 +407,7 @@ public class ElasticSearch implements Search {
 		return searchQuery(appid, searchQueryRaw(appid, type, qb, pager));
 	}
 
-	@Override
-	public <P extends ParaObject> List<P> findTags(String appid, String keyword, Pager... pager) {
+	private <P extends ParaObject> List<P> findTagsInternal(String appid, String keyword, Pager... pager) {
 		if (StringUtils.isBlank(keyword)) {
 			return Collections.emptyList();
 		}
@@ -456,8 +415,7 @@ public class ElasticSearch implements Search {
 		return searchQuery(appid, Utils.type(Tag.class), qb, pager);
 	}
 
-	@Override
-	public <P extends ParaObject> List<P> findNearby(String appid, String type,
+	private <P extends ParaObject> List<P> findNearbyInternal(String appid, String type,
 		String query, int radius, double lat, double lng, Pager... pager) {
 
 		if (StringUtils.isBlank(type) || StringUtils.isBlank(appid)) {
@@ -654,8 +612,7 @@ public class ElasticSearch implements Search {
 		return map;
 	}
 
-	@Override
-	public Long getCount(String appid, String type) {
+	private Long getCountInternal(String appid, String type) {
 		if (StringUtils.isBlank(appid)) {
 			return 0L;
 		}
@@ -682,8 +639,7 @@ public class ElasticSearch implements Search {
 		return count;
 	}
 
-	@Override
-	public Long getCount(String appid, String type, Map<String, ?> terms) {
+	private Long getCountInternal(String appid, String type, Map<String, ?> terms) {
 		if (StringUtils.isBlank(appid) || terms == null || terms.isEmpty()) {
 			return 0L;
 		}
@@ -728,103 +684,203 @@ public class ElasticSearch implements Search {
 	//////////////////////////////////////////////////////////////
 
 	@Override
-	public void index(ParaObject so) {
-		index(Config.getRootAppIdentifier(), so);
+	public void index(ParaObject object) {
+		indexAllInternal(Config.getRootAppIdentifier(), Collections.singletonList(object));
 	}
 
 	@Override
-	public void unindex(ParaObject so) {
-		unindex(Config.getRootAppIdentifier(), so);
+	public void index(String appid, ParaObject object) {
+		indexAllInternal(appid, Collections.singletonList(object));
+	}
+
+	@Override
+	public void unindex(ParaObject object) {
+		unindexAllInternal(Config.getRootAppIdentifier(), Collections.singletonList(object));
+	}
+
+	@Override
+	public void unindex(String appid, ParaObject object) {
+		unindexAllInternal(appid, Collections.singletonList(object));
 	}
 
 	@Override
 	public <P extends ParaObject> void indexAll(List<P> objects) {
-		indexAll(Config.getRootAppIdentifier(), objects);
+		indexAllInternal(Config.getRootAppIdentifier(), objects);
+	}
+
+	@Override
+	public <P extends ParaObject> void indexAll(String appid, List<P> objects) {
+		indexAllInternal(appid, objects);
 	}
 
 	@Override
 	public <P extends ParaObject> void unindexAll(List<P> objects) {
-		unindexAll(Config.getRootAppIdentifier(), objects);
+		unindexAllInternal(Config.getRootAppIdentifier(), objects);
+	}
+
+	@Override
+	public <P extends ParaObject> void unindexAll(String appid, List<P> objects) {
+		unindexAllInternal(appid, objects);
 	}
 
 	@Override
 	public void unindexAll(Map<String, ?> terms, boolean matchAll) {
-		unindexAll(Config.getRootAppIdentifier(), terms, matchAll);
+		unindexAllInternal(Config.getRootAppIdentifier(), terms, matchAll);
+	}
+
+	@Override
+	public void unindexAll(String appid, Map<String, ?> terms, boolean matchAll) {
+		unindexAllInternal(appid, terms, matchAll);
 	}
 
 	@Override
 	public <P extends ParaObject> P findById(String id) {
-		return findById(Config.getRootAppIdentifier(), id);
+		return findByIdInternal(Config.getRootAppIdentifier(), id);
+	}
+
+	@Override
+	public <P extends ParaObject> P findById(String appid, String id) {
+		return findByIdInternal(appid, id);
 	}
 
 	@Override
 	public <P extends ParaObject> List<P> findByIds(List<String> ids) {
-		return findByIds(Config.getRootAppIdentifier(), ids);
+		return findByIdsInternal(Config.getRootAppIdentifier(), ids);
+	}
+
+	@Override
+	public <P extends ParaObject> List<P> findByIds(String appid, List<String> ids) {
+		return findByIdsInternal(appid, ids);
 	}
 
 	@Override
 	public <P extends ParaObject> List<P> findNearby(String type,
 			String query, int radius, double lat, double lng, Pager... pager) {
-		return findNearby(Config.getRootAppIdentifier(), type, query, radius, lat, lng, pager);
+		return findNearbyInternal(Config.getRootAppIdentifier(), type, query, radius, lat, lng, pager);
+	}
+
+	@Override
+	public <P extends ParaObject> List<P> findNearby(String appid, String type,
+			String query, int radius, double lat, double lng, Pager... pager) {
+		return findNearbyInternal(appid, type, query, radius, lat, lng, pager);
 	}
 
 	@Override
 	public <P extends ParaObject> List<P> findPrefix(String type, String field, String prefix, Pager... pager) {
-		return findPrefix(Config.getRootAppIdentifier(), type, field, prefix, pager);
+		return findPrefixInternal(Config.getRootAppIdentifier(), type, field, prefix, pager);
+	}
+
+	@Override
+	public <P extends ParaObject> List<P> findPrefix(String appid, String type, String field, String prefix, Pager... pager) {
+		return findPrefixInternal(appid, type, field, prefix, pager);
 	}
 
 	@Override
 	public <P extends ParaObject> List<P> findQuery(String type, String query, Pager... pager) {
-		return findQuery(Config.getRootAppIdentifier(), type, query, pager);
+		return findQueryInternal(Config.getRootAppIdentifier(), type, query, pager);
+	}
+
+	@Override
+	public <P extends ParaObject> List<P> findQuery(String appid, String type, String query, Pager... pager) {
+		return findQueryInternal(appid, type, query, pager);
 	}
 
 	@Override
 	public <P extends ParaObject> List<P> findNestedQuery(String type, String field, String query, Pager... pager) {
-		return findNestedQuery(Config.getRootAppIdentifier(), type, field, query, pager);
+		return findNestedQueryInternal(Config.getRootAppIdentifier(), type, field, query, pager);
+	}
+
+	@Override
+	public <P extends ParaObject> List<P> findNestedQuery(String appid, String type, String field, String query, Pager... pager) {
+		return findNestedQueryInternal(appid, type, field, query, pager);
 	}
 
 	@Override
 	public <P extends ParaObject> List<P> findSimilar(String type, String filterKey, String[] fields,
 			String liketext, Pager... pager) {
-		return findSimilar(Config.getRootAppIdentifier(), type, filterKey, fields, liketext, pager);
+		return findSimilarInternal(Config.getRootAppIdentifier(), type, filterKey, fields, liketext, pager);
+	}
+
+	@Override
+	public <P extends ParaObject> List<P> findSimilar(String appid, String type, String filterKey, String[] fields,
+			String liketext, Pager... pager) {
+		return findSimilarInternal(appid, type, filterKey, fields, liketext, pager);
 	}
 
 	@Override
 	public <P extends ParaObject> List<P> findTagged(String type, String[] tags, Pager... pager) {
-		return findTagged(Config.getRootAppIdentifier(), type, tags, pager);
+		return findTaggedInternal(Config.getRootAppIdentifier(), type, tags, pager);
+	}
+
+	@Override
+	public <P extends ParaObject> List<P> findTagged(String appid, String type, String[] tags, Pager... pager) {
+		return findTaggedInternal(appid, type, tags, pager);
 	}
 
 	@Override
 	public <P extends ParaObject> List<P> findTags(String keyword, Pager... pager) {
-		return findTags(Config.getRootAppIdentifier(), keyword, pager);
+		return findTagsInternal(Config.getRootAppIdentifier(), keyword, pager);
+	}
+
+	@Override
+	public <P extends ParaObject> List<P> findTags(String appid, String keyword, Pager... pager) {
+		return findTagsInternal(appid, keyword, pager);
 	}
 
 	@Override
 	public <P extends ParaObject> List<P> findTermInList(String type, String field,
 			List<?> terms, Pager... pager) {
-		return findTermInList(Config.getRootAppIdentifier(), type, field, terms, pager);
+		return findTermInListInternal(Config.getRootAppIdentifier(), type, field, terms, pager);
+	}
+
+	@Override
+	public <P extends ParaObject> List<P> findTermInList(String appid, String type, String field,
+			List<?> terms, Pager... pager) {
+		return findTermInListInternal(appid, type, field, terms, pager);
 	}
 
 	@Override
 	public <P extends ParaObject> List<P> findTerms(String type, Map<String, ?> terms,
 			boolean mustMatchBoth, Pager... pager) {
-		return findTerms(Config.getRootAppIdentifier(), type, terms, mustMatchBoth, pager);
+		return findTermsInternal(Config.getRootAppIdentifier(), type, terms, mustMatchBoth, pager);
+	}
+
+	@Override
+	public <P extends ParaObject> List<P> findTerms(String appid, String type, Map<String, ?> terms,
+			boolean mustMatchBoth, Pager... pager) {
+		return findTermsInternal(appid, type, terms, mustMatchBoth, pager);
 	}
 
 	@Override
 	public <P extends ParaObject> List<P> findWildcard(String type, String field, String wildcard,
 			Pager... pager) {
-		return findWildcard(Config.getRootAppIdentifier(), type, field, wildcard, pager);
+		return findWildcardInternal(Config.getRootAppIdentifier(), type, field, wildcard, pager);
+	}
+
+	@Override
+	public <P extends ParaObject> List<P> findWildcard(String appid, String type, String field, String wildcard,
+			Pager... pager) {
+		return findWildcardInternal(appid, type, field, wildcard, pager);
 	}
 
 	@Override
 	public Long getCount(String type) {
-		return getCount(Config.getRootAppIdentifier(), type);
+		return getCountInternal(Config.getRootAppIdentifier(), type);
+	}
+
+	@Override
+	public Long getCount(String appid, String type) {
+		return getCountInternal(appid, type);
 	}
 
 	@Override
 	public Long getCount(String type, Map<String, ?> terms) {
-		return getCount(Config.getRootAppIdentifier(), type, terms);
+		return getCountInternal(Config.getRootAppIdentifier(), type, terms);
+	}
+
+	@Override
+	public Long getCount(String appid, String type, Map<String, ?> terms) {
+		return getCountInternal(appid, type, terms);
 	}
 
 }
