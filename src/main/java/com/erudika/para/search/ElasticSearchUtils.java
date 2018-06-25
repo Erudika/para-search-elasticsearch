@@ -852,27 +852,38 @@ public final class ElasticSearchUtils {
 	};
 
 	private static ActionListener<BulkResponse> getSyncRequestListener() {
-		if (syncListener == null) {
-			syncListener = new ActionListener<BulkResponse>() {
-				public void onResponse(BulkResponse response) {
-					int status = response.status().getStatus();
-					if (response.hasFailures() || status >= 400) {
-						logger.warn("Bulk operation might have failed - status {}. Reason: {}",
-								status, response.buildFailureMessage());
-					}
-				}
-				public void onFailure(Exception e) {
-					logger.error("Bulk failure: {}", e);
-					handleFailedRequests(e);
-				}
-			};
+		if (syncListener != null) {
+			return syncListener;
 		}
+		syncListener = new ActionListener<BulkResponse>() {
+			public void onResponse(BulkResponse response) {
+				if (response != null && response.hasFailures()) {
+					Arrays.stream(response.getItems()).
+							filter(BulkItemResponse::isFailed).
+							forEach(item -> {
+								logger.error("Failed to execute {} operation for index '{}', document id '{}': ",
+										item.getOpType(), item.getIndex(), item.getId(), item.getFailure().getMessage());
+							});
+
+					handleFailedRequests(Arrays.stream(response.getItems()).
+							filter(BulkItemResponse::isFailed).
+							map(BulkItemResponse::getFailure).
+							map(BulkItemResponse.Failure::getCause).
+							filter(Objects::nonNull).
+							findFirst().orElse(null));
+				}
+			}
+			public void onFailure(Exception e) {
+				logger.error("Synchronous indexing operation failed!", e);
+				handleFailedRequests(e);
+			}
+		};
 		return syncListener;
 	}
 
 	private static void handleFailedRequests(Throwable t) {
-		if (Config.getConfigBoolean("es.fail_on_indexing_errors", false)) {
-			throw new RuntimeException("Failed to index object(s)!", t);
+		if (t != null && Config.getConfigBoolean("es.fail_on_indexing_errors", false)) {
+			throw new RuntimeException("Synchronous indexing operation failed!", t);
 		}
 	}
 
