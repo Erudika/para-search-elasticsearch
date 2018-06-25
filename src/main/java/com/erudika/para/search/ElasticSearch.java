@@ -17,8 +17,6 @@
  */
 package com.erudika.para.search;
 
-import com.erudika.para.AppCreatedListener;
-import com.erudika.para.AppDeletedListener;
 import com.erudika.para.core.Address;
 import com.erudika.para.core.App;
 import com.erudika.para.core.ParaObject;
@@ -32,10 +30,11 @@ import static com.erudika.para.search.ElasticSearchUtils.convertQueryStringToNes
 import static com.erudika.para.search.ElasticSearchUtils.getIndexName;
 import static com.erudika.para.search.ElasticSearchUtils.getNestedKey;
 import static com.erudika.para.search.ElasticSearchUtils.getPager;
+import static com.erudika.para.search.ElasticSearchUtils.getRESTClient;
 import static com.erudika.para.search.ElasticSearchUtils.getTermsQuery;
+import static com.erudika.para.search.ElasticSearchUtils.getTransportClient;
 import static com.erudika.para.search.ElasticSearchUtils.getType;
 import static com.erudika.para.search.ElasticSearchUtils.getValueFieldName;
-import static com.erudika.para.search.ElasticSearchUtils.isAsyncEnabled;
 import static com.erudika.para.search.ElasticSearchUtils.keyValueBoolQuery;
 import static com.erudika.para.search.ElasticSearchUtils.nestedMode;
 import static com.erudika.para.search.ElasticSearchUtils.nestedPropsQuery;
@@ -43,7 +42,6 @@ import static com.erudika.para.search.ElasticSearchUtils.qs;
 import com.erudika.para.utils.Config;
 import com.erudika.para.utils.Pager;
 import com.erudika.para.utils.Utils;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -51,27 +49,22 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.math.NumberUtils;
 import static org.apache.lucene.search.join.ScoreMode.Avg;
-import org.elasticsearch.action.ActionListener;
-import org.elasticsearch.action.bulk.BulkRequest;
-import org.elasticsearch.action.bulk.BulkResponse;
 import org.elasticsearch.action.delete.DeleteRequest;
-import org.elasticsearch.action.delete.DeleteResponse;
 import org.elasticsearch.action.get.GetRequest;
 import org.elasticsearch.action.get.GetResponse;
 import org.elasticsearch.action.index.IndexRequest;
-import org.elasticsearch.action.index.IndexResponse;
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.action.search.SearchScrollRequest;
 import org.elasticsearch.action.search.SearchType;
-import org.elasticsearch.client.Client;
-import org.elasticsearch.client.RestHighLevelClient;
 import org.elasticsearch.common.unit.DistanceUnit;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.index.IndexNotFoundException;
@@ -98,6 +91,8 @@ import org.elasticsearch.search.sort.SortBuilders;
 import org.elasticsearch.search.sort.SortOrder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import static com.erudika.para.search.ElasticSearchUtils.executeRequests;
+import org.elasticsearch.action.DocWriteRequest;
 
 /**
  * An implementation of the {@link Search} interface using ElasticSearch.
@@ -126,32 +121,28 @@ public class ElasticSearch implements Search {
 		if (Config.isSearchEnabled()) {
 			ElasticSearchUtils.initClient();
 			// set up automatic index creation and deletion
-			App.addAppCreatedListener(new AppCreatedListener() {
-				public void onAppCreated(App app) {
-					if (app != null) {
-						String appid = app.getAppIdentifier();
-						if (app.isSharingIndex()) {
-							ElasticSearchUtils.addIndexAliasWithRouting(Config.getRootAppIdentifier(), appid);
-						} else {
-							int shards = app.isRootApp() ? Config.getConfigInt("es.shards", 5)
-									: Config.getConfigInt("es.shards_for_child_apps", 2);
-							int replicas = app.isRootApp() ? Config.getConfigInt("es.replicas", 0)
-									: Config.getConfigInt("es.replicas_for_child_apps", 0);
-							ElasticSearchUtils.createIndex(appid, shards, replicas);
-						}
+			App.addAppCreatedListener((App app) -> {
+				if (app != null) {
+					String appid = app.getAppIdentifier();
+					if (app.isSharingIndex()) {
+						ElasticSearchUtils.addIndexAliasWithRouting(Config.getRootAppIdentifier(), appid);
+					} else {
+						int shards = app.isRootApp() ? Config.getConfigInt("es.shards", 5)
+								: Config.getConfigInt("es.shards_for_child_apps", 2);
+						int replicas = app.isRootApp() ? Config.getConfigInt("es.replicas", 0)
+								: Config.getConfigInt("es.replicas_for_child_apps", 0);
+						ElasticSearchUtils.createIndex(appid, shards, replicas);
 					}
 				}
 			});
-			App.addAppDeletedListener(new AppDeletedListener() {
-				public void onAppDeleted(App app) {
-					if (app != null) {
-						String appid = app.getAppIdentifier();
-						if (app.isSharingIndex()) {
-							// no need to manually cleanup the documents here - this is done in the DAO layer
-							ElasticSearchUtils.removeIndexAlias(Config.getRootAppIdentifier(), appid);
-						} else {
-							ElasticSearchUtils.deleteIndex(appid);
-						}
+			App.addAppDeletedListener((App app) -> {
+				if (app != null) {
+					String appid = app.getAppIdentifier();
+					if (app.isSharingIndex()) {
+						// no need to manually cleanup the documents here - this is done in the DAO layer
+						ElasticSearchUtils.removeIndexAlias(Config.getRootAppIdentifier(), appid);
+					} else {
+						ElasticSearchUtils.deleteIndex(appid);
 					}
 				}
 			});
@@ -165,41 +156,17 @@ public class ElasticSearch implements Search {
 		return dao;
 	}
 
-	Client transportClient() {
-		return ElasticSearchUtils.getTransportClient();
-	}
-
-	RestHighLevelClient restClient() {
-		return ElasticSearchUtils.getRESTClient();
-	}
-
 	@Override
 	public void index(String appid, ParaObject po) {
 		if (po == null || StringUtils.isBlank(appid)) {
 			return;
 		}
-		ActionListener<IndexResponse> listener = ElasticSearchUtils.
-				getIndexResponseHandler(null, ex -> ElasticSearchUtils.handleFailedIndexing(dao, appid, po));
 		try {
-			IndexRequest indexRequest = new IndexRequest(getIndexName(appid), getType(), po.getId()).
-					source(ElasticSearchUtils.getSourceFromParaObject(po));
-			if (USE_TRANSPORT_CLIENT) {
-				if (isAsyncEnabled()) {
-					transportClient().index(indexRequest, listener);
-				} else {
-					listener.onResponse(transportClient().index(indexRequest).actionGet());
-				}
-			} else {
-				if (isAsyncEnabled()) {
-					restClient().indexAsync(indexRequest, listener);
-				} else {
-					listener.onResponse(restClient().index(indexRequest));
-				}
-			}
+			executeRequests(Collections.singletonList(new IndexRequest(getIndexName(appid), getType(), po.getId()).
+					source(ElasticSearchUtils.getSourceFromParaObject(po))));
 			logger.debug("Search.index() {}", po.getId());
 		} catch (Exception e) {
 			logger.warn(null, e);
-			listener.onFailure(e);
 		}
 	}
 
@@ -209,21 +176,7 @@ public class ElasticSearch implements Search {
 			return;
 		}
 		try {
-			ActionListener<DeleteResponse> listener = ElasticSearchUtils.getIndexResponseHandler();
-			DeleteRequest deleteRequest = new DeleteRequest(getIndexName(appid), getType(), po.getId());
-			if (USE_TRANSPORT_CLIENT) {
-				if (isAsyncEnabled()) {
-					transportClient().delete(deleteRequest, listener);
-				} else {
-					listener.onResponse(transportClient().delete(deleteRequest).actionGet());
-				}
-			} else {
-				if (isAsyncEnabled()) {
-					restClient().deleteAsync(deleteRequest, listener);
-				} else {
-					listener.onResponse(restClient().delete(deleteRequest));
-				}
-			}
+			executeRequests(Collections.singletonList(new DeleteRequest(getIndexName(appid), getType(), po.getId())));
 			logger.debug("Search.unindex() {}", po.getId());
 		} catch (Exception e) {
 			logger.warn(null, e);
@@ -235,31 +188,15 @@ public class ElasticSearch implements Search {
 		if (StringUtils.isBlank(appid) || objects == null || objects.isEmpty()) {
 			return;
 		}
-		BulkRequest bulk = new BulkRequest();
-		for (ParaObject po : objects) {
-			bulk.add(new IndexRequest(getIndexName(appid), getType(), po.getId()).
-					source(ElasticSearchUtils.getSourceFromParaObject(po)));
-		}
-		ActionListener<BulkResponse> listener = ElasticSearchUtils.getBulkIndexResponseHandler(null,
-				ex -> ElasticSearchUtils.handleFailedBulkIndexing(dao, appid, objects));
 		try {
-			if (USE_TRANSPORT_CLIENT) {
-				if (isAsyncEnabled()) {
-					transportClient().bulk(bulk, listener);
-				} else {
-					listener.onResponse(transportClient().bulk(bulk).actionGet());
-				}
-			} else {
-				if (isAsyncEnabled()) {
-					restClient().bulkAsync(bulk, listener);
-				} else {
-					listener.onResponse(restClient().bulk(bulk));
-				}
-			}
+			executeRequests(objects.stream().
+					filter(Objects::nonNull).
+					map(obj -> new IndexRequest(getIndexName(appid), getType(), obj.getId()).
+						source(ElasticSearchUtils.getSourceFromParaObject(obj))).
+					collect(Collectors.toList()));
 			logger.debug("Search.indexAll() {}", objects.size());
 		} catch (Exception e) {
 			logger.warn(null, e);
-			listener.onFailure(e);
 		}
 	}
 
@@ -269,11 +206,10 @@ public class ElasticSearch implements Search {
 			return;
 		}
 		try {
-			BulkRequest bulk = new BulkRequest();
-			for (ParaObject po : objects) {
-				bulk.add(new DeleteRequest(getIndexName(appid), getType(), po.getId()));
-			}
-			bulkRequest(bulk);
+			executeRequests(objects.stream().
+					filter(Objects::nonNull).
+					map(obj -> new DeleteRequest(getIndexName(appid), getType(), obj.getId())).
+					collect(Collectors.toList()));
 			logger.debug("Search.unindexAll() {}", objects.size());
 		} catch (Exception e) {
 			logger.warn(null, e);
@@ -296,61 +232,44 @@ public class ElasticSearch implements Search {
 					source(SearchSourceBuilder.searchSource().query(fb).size(batchSize));
 
 			if (USE_TRANSPORT_CLIENT) {
-				scrollResp = transportClient().search(search).actionGet();
+				scrollResp = getTransportClient().search(search).actionGet();
 			} else {
-				scrollResp = restClient().search(search);
+				scrollResp = getRESTClient().search(search);
 			}
 
-			BulkRequest bulk = new BulkRequest();
+			List<DocWriteRequest<?>> batch = new LinkedList<>();
 			while (true) {
-				for (SearchHit hit : scrollResp.getHits()) {
-					bulk.add(new DeleteRequest(getIndexName(appid), getType(), hit.getId()));
-				}
-				if (bulk.numberOfActions() >= batchSize) {
-					unindexedCount += bulk.numberOfActions();
-					bulkRequest(bulk);
-					bulk = new BulkRequest();
+				batch.addAll(Arrays.stream(scrollResp.getHits().getHits()).
+						filter(Objects::nonNull).
+						map(hit -> new DeleteRequest(getIndexName(appid), getType(), hit.getId())).
+						collect(Collectors.toList()));
+
+				if (batch.size() >= batchSize) {
+					unindexedCount += batch.size();
+					executeRequests(batch);
+					batch.clear();
 				}
 				// next page
 				SearchScrollRequest scroll = new SearchScrollRequest(scrollResp.getScrollId()).
 						scroll(new TimeValue(60000));
 				if (USE_TRANSPORT_CLIENT) {
-					scrollResp = transportClient().searchScroll(scroll).actionGet();
+					scrollResp = getTransportClient().searchScroll(scroll).actionGet();
 				} else {
-					scrollResp = restClient().searchScroll(scroll);
+					scrollResp = getRESTClient().searchScroll(scroll);
 				}
 				if (scrollResp.getHits().getHits().length == 0) {
 					break;
 				}
 			}
-			if (bulk.numberOfActions() > 0) {
-				unindexedCount += bulk.numberOfActions();
-				bulkRequest(bulk);
+			if (batch.size() > 0) {
+				unindexedCount += batch.size();
+				executeRequests(batch);
 			}
 			time = System.nanoTime() - time;
 			logger.info("Unindexed {} documents without failures, took {}s.",
 					unindexedCount, TimeUnit.NANOSECONDS.toSeconds(time));
 		} catch (Exception e) {
 			logger.warn(null, e);
-		}
-	}
-
-	private void bulkRequest(BulkRequest bulk) throws IOException {
-		if (bulk.numberOfActions() > 0) {
-			ActionListener<BulkResponse> listener = ElasticSearchUtils.getBulkIndexResponseHandler();
-			if (USE_TRANSPORT_CLIENT) {
-				if (isAsyncEnabled()) {
-					transportClient().bulk(bulk, listener);
-				} else {
-					listener.onResponse(transportClient().bulk(bulk).actionGet());
-				}
-			} else {
-				if (isAsyncEnabled()) {
-					restClient().bulkAsync(bulk, listener);
-				} else {
-					listener.onResponse(restClient().bulk(bulk));
-				}
-			}
 		}
 	}
 
@@ -682,9 +601,9 @@ public class ElasticSearch implements Search {
 			logger.debug("Elasticsearch query: {}", search.toString());
 
 			if (USE_TRANSPORT_CLIENT) {
-				hits = transportClient().search(search).actionGet().getHits();
+				hits = getTransportClient().search(search).actionGet().getHits();
 			} else {
-				hits = restClient().search(search).getHits();
+				hits = getRESTClient().search(search).getHits();
 			}
 			page.setCount(hits.getTotalHits());
 			if (hits.getHits().length > 0) {
@@ -718,9 +637,9 @@ public class ElasticSearch implements Search {
 			GetRequest get = new GetRequest().index(getIndexName(appid)).id(key);
 			GetResponse gres;
 			if (USE_TRANSPORT_CLIENT) {
-				gres = transportClient().get(get).actionGet();
+				gres = getTransportClient().get(get).actionGet();
 			} else {
-				gres = restClient().get(get);
+				gres = getRESTClient().get(get);
 			}
 			if (gres.isExists()) {
 				map = gres.getSource();
@@ -751,9 +670,9 @@ public class ElasticSearch implements Search {
 			SearchRequest search = new SearchRequest(getIndexName(appid)).
 					source(SearchSourceBuilder.searchSource().size(0).query(query));
 			if (USE_TRANSPORT_CLIENT) {
-				count = transportClient().search(search).actionGet().getHits().getTotalHits();
+				count = getTransportClient().search(search).actionGet().getHits().getTotalHits();
 			} else {
-				count = restClient().search(search).getHits().getTotalHits();
+				count = getRESTClient().search(search).getHits().getTotalHits();
 			}
 		} catch (Exception e) {
 			Throwable cause = e.getCause();
@@ -778,9 +697,9 @@ public class ElasticSearch implements Search {
 				SearchRequest search = new SearchRequest(getIndexName(appid)).
 					source(SearchSourceBuilder.searchSource().size(0).query(query));
 				if (USE_TRANSPORT_CLIENT) {
-					count = transportClient().search(search).actionGet().getHits().getTotalHits();
+					count = getTransportClient().search(search).actionGet().getHits().getTotalHits();
 				} else {
-					count = restClient().search(search).getHits().getTotalHits();
+					count = getRESTClient().search(search).getHits().getTotalHits();
 				}
 			} catch (Exception e) {
 				Throwable cause = e.getCause();

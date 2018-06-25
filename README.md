@@ -20,6 +20,7 @@ This plugin allows you to use Elasticsearch as the search engine for Para.
 - Implements `Search` interface and supports both transport and high level clients
 - Implements `DAO` interface so you can use Elasticsearch as a database (avoid in production!)
 - Index sharing and multitenancy support through alias routing and filtering
+- Supports both asynchronous and synchronous document operations
 - Full pagination support for both "search-after" and "from-size" modes
 - Proxy endpoint `/v1/_elasticsearch` - relays all requests directly to Elasticsearch (disabled by default)
 - Supports AWS Elasticsearch Service with request signing
@@ -48,7 +49,6 @@ Here are all the configuration properties for this plugin (these go inside your 
 ```ini
 # enable this to bypass the DB and read all data straight from ES
 para.read_from_index = false
-para.es.async_enabled = false
 para.es.cors_enabled = false
 para.es.cors_allow_origin = "localhost"
 para.es.discovery_type = "ec2"
@@ -67,9 +67,20 @@ para.es.sign_requests_to_aws = false
 para.es.aws_region = "eu-west-1"
 para.es.fail_on_indexing_errors = false
 
+# asynchronous settings
+para.es.async_enabled = false
+para.es.bulk.size_limit_mb = 5
+para.es.bulk.action_limit = 1000
+para.es.bulk.concurrent_requests = 1
+para.es.bulk.flush_interval_ms = 5000
+para.es.bulk.backoff_initial_delay_ms = 50
+para.es.bulk.max_num_retries = 8
+para.es.bulk.flush_immediately = false
+
 # proxy settings
 para.es.proxy_enabled = false
 para.es.proxy_path = "_elasticsearch"
+para.es.proxy_reindexing_enabled = false
 ```
 
 Finally, set the config property:
@@ -78,6 +89,34 @@ para.search = "ElasticSearch"
 ```
 This could be a Java system property or part of a `application.conf` file on the classpath.
 This tells Para to use the Elasticsearch implementation instead of the default (Lucene).
+
+### Synchronous versus Asynchronous Indexing
+The Elasticsearch plugin supports both synchronous (default) and asynchronous indexing modes.
+For synchronous indexing, the Elasticsearch plugin will make a single, blocking request through the client
+and wait for a response. This means each document operation (index, reindex, or delete) invokes
+a new client request. For certain applications, this can induce heavy load on the Elasticsearch cluster.
+The advantage of synchronous indexing, however, is the result of the request can be communicated back
+to the client application. If the setting `para.es.fail_on_indexing_errors` is set to `true`, synchronous
+requests that result in an error will propagate back to the client application with an HTTP error code.
+
+The asynchronous indexing mode uses the Elasticsearch BulkProcessor for batching all requests to the Elasticsearch
+cluster. If the asynchronous mode is enabled, all document requests will be fed into the BulkProcessor, which
+will flush the requests to the cluster on occasion. There are several configurable parameters to control the
+flush frequency based on document count, total document size (MB), and total duration (ms). Since Elasticsearch
+is designed as a near real-time search engine, the asynchronous mode is highly recommended. Making occasional,
+larger batches of document requests will help reduce the load on the Elasticsearch cluster.
+
+The asynchronous indexing mode also offers an appealing feature to automatically retry failed indexing requests. If
+your Elasticsearch cluster is under heavy load, it's possible a request to index new documents may be rejected. With
+synchronous indexing, the burden falls on the client application to try the indexing request again. The Elasticsearch
+BulkProcessor, however, offers a useful feature to automatically retry indexing requests with exponential
+backoff between retries. If the index request fails with a `EsRejectedExecutionException`, the request
+will be retried up to `para.es.bulk.max_num_retries` times. Even if your use case demands a high degree
+of confidence with respect to data consistency between your DAO and Search, it's still recommended to use
+asynchronous indexing with retries enabled. If you'd prefer to use asynchronous indexing but have the BulkProcessor
+flushed upon every invocation of index/unindex/indexAll/unindexAll, simply enabled `para.es.bulk.flush_immediately`.
+When this option is enabled, the BulkProcessor's flush method will be called immediately after adding the documents
+in the request. This option is also useful for writing unit tests where you want ensure the documents flush promptly.
 
 ### Indexing modes
 

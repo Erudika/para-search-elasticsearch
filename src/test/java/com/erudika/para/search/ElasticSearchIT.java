@@ -47,6 +47,7 @@ public class ElasticSearchIT extends SearchTest {
 		System.setProperty("para.cluster_name", "test");
 		System.setProperty("para.es.shards", "2");
 		System.setProperty("para.es.root_index_sharing_enabled", "true");
+		System.setProperty("para.es.bulk.flush_immediately", "true");
 		s = new ElasticSearch();
 		ElasticSearchUtils.createIndex(Config.getRootAppIdentifier());
 		ElasticSearchUtils.createIndex(appid1);

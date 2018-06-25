@@ -18,3 +18,5 @@ nb-configuration.xml
 settings.xml
 dependency-reduced-pom.xml
 /nbproject/
+*.idea
+*.iml

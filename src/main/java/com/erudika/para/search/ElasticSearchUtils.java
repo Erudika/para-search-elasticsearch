@@ -38,6 +38,7 @@ import java.net.InetAddress;
 import java.net.URI;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -45,7 +46,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
-import java.util.function.Consumer;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.apache.commons.lang3.StringUtils;
@@ -73,7 +74,7 @@ import org.apache.lucene.search.TermRangeQuery;
 import org.apache.lucene.search.WildcardQuery;
 import static org.apache.lucene.search.join.ScoreMode.Avg;
 import org.elasticsearch.action.ActionListener;
-import org.elasticsearch.action.DocWriteResponse;
+import org.elasticsearch.action.DocWriteRequest;
 import org.elasticsearch.action.admin.indices.alias.IndicesAliasesRequest;
 import org.elasticsearch.action.admin.indices.alias.IndicesAliasesRequest.AliasActions;
 import org.elasticsearch.action.admin.indices.alias.get.GetAliasesRequest;
@@ -82,6 +83,9 @@ import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequest;
 import org.elasticsearch.action.admin.indices.exists.indices.IndicesExistsRequest;
 import org.elasticsearch.action.admin.indices.get.GetIndexRequest;
 import org.elasticsearch.action.admin.indices.get.GetIndexResponse;
+import org.elasticsearch.action.bulk.BackoffPolicy;
+import org.elasticsearch.action.bulk.BulkItemResponse;
+import org.elasticsearch.action.bulk.BulkProcessor;
 import org.elasticsearch.action.bulk.BulkRequest;
 import org.elasticsearch.action.bulk.BulkResponse;
 import org.elasticsearch.action.index.IndexRequest;
@@ -94,6 +98,9 @@ import org.elasticsearch.client.transport.TransportClient;
 import org.elasticsearch.cluster.health.ClusterHealthStatus;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.transport.TransportAddress;
+import org.elasticsearch.common.unit.ByteSizeUnit;
+import org.elasticsearch.common.unit.ByteSizeValue;
+import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.xcontent.XContentType;
 import org.elasticsearch.index.query.BoolQueryBuilder;
 import org.elasticsearch.index.query.NestedQueryBuilder;
@@ -125,6 +132,8 @@ public final class ElasticSearchUtils {
 	private static final Logger logger = LoggerFactory.getLogger(ElasticSearchUtils.class);
 	private static TransportClient searchClient;
 	private static RestHighLevelClient restClient;
+	private static BulkProcessor bulkProcessor;
+	private static ActionListener<BulkResponse> syncListener;
 	private static final int MAX_QUERY_DEPTH = 10; // recursive depth for compound queries - bool, boost
 	private static final String DATE_FORMAT = "epoch_millis||epoch_second||yyyy-MM-dd HH:mm:ss||"
 			+ "yyyy-MM-dd||yyyy/MM/dd||yyyyMMdd||yyyy";
@@ -146,6 +155,20 @@ public final class ElasticSearchUtils {
 	 */
 	static boolean nestedMode() {
 		return Config.getConfigBoolean("es.use_nested_custom_fields", false);
+	}
+
+	/**
+	 * @return true if asynchronous indexing/unindexing is enabled.
+	 */
+	static boolean asyncEnabled() {
+		return Config.getConfigBoolean("es.async_enabled", false);
+	}
+
+	/**
+	 * @return true if we want the bulk processor to flush immediately after each bulk request.
+	 */
+	static boolean flushImmediately() {
+		return Config.getConfigBoolean("es.bulk.flush_immediately", false);
 	}
 
 	/**
@@ -284,6 +307,18 @@ public final class ElasticSearchUtils {
 			} catch (IOException ex) {
 				logger.error(null, ex);
 			}
+		}
+		if (bulkProcessor != null) {
+			boolean closed = false;
+			try {
+				closed = bulkProcessor.awaitClose(10, TimeUnit.MINUTES);
+			} catch (InterruptedException ex) {
+				logger.warn("Interrupted waiting for BulkProcessor to close.", ex);
+			}
+			if (!closed) {
+				bulkProcessor.close();
+			}
+			bulkProcessor = null;
 		}
 	}
 
@@ -448,8 +483,7 @@ public final class ElasticSearchUtils {
 
 			logger.info("rebuildIndex(): {}", indexName);
 
-			BulkRequest bulk = new BulkRequest();
-			BulkResponse resp;
+			List<DocWriteRequest<?>> batch = new LinkedList<>();
 			Pager p = getPager(pager);
 			int batchSize = Config.getConfigInt("reindex_batch_size", p.getLimit());
 			long reindexedCount = 0;
@@ -461,25 +495,23 @@ public final class ElasticSearchUtils {
 				for (ParaObject obj : list) {
 					if (obj != null) {
 						// put objects from DB into the newly created index
-						bulk.add(new IndexRequest(newName, getType(), obj.getId()).source(getSourceFromParaObject(obj)));
+						batch.add(new IndexRequest(newName, getType(), obj.getId()).source(getSourceFromParaObject(obj)));
 						// index in batches of ${queueSize} objects
-						if (bulk.numberOfActions() >= batchSize) {
-							reindexedCount += bulk.numberOfActions();
-							resp = bulkRequest(bulk);
-							logger.info("rebuildIndex(): indexed {}, failures: {}",
-									bulk.numberOfActions(), resp.hasFailures() ? resp.buildFailureMessage() : "false");
-							bulk = new BulkRequest();
+						if (batch.size() >= batchSize) {
+							reindexedCount += batch.size();
+							executeRequests(batch);
+							logger.info("rebuildIndex(): indexed {}", batch.size());
+							batch.clear();
 						}
 					}
 				}
 			} while (!list.isEmpty());
 
 			// anything left after loop? index that too
-			if (bulk.numberOfActions() > 0) {
-				reindexedCount += bulk.numberOfActions();
-				resp = bulkRequest(bulk);
-				logger.info("rebuildIndex(): indexed {}, failures: {}",
-						bulk.numberOfActions(), resp.hasFailures() ? resp.buildFailureMessage() : "false");
+			if (batch.size() > 0) {
+				reindexedCount += batch.size();
+				executeRequests(batch);
+				logger.info("rebuildIndex(): indexed {}", batch.size());
 			}
 
 			if (!app.isShared()) {
@@ -501,14 +533,6 @@ public final class ElasticSearchUtils {
 	public static void refreshIndex(String appid) {
 		if (!StringUtils.isBlank(appid)) {
 			getTransportClient().admin().indices().prepareRefresh(getIndexName(appid)).get();
-		}
-	}
-
-	private static BulkResponse bulkRequest(BulkRequest bulk) throws IOException {
-		if (USE_TRANSPORT_CLIENT) {
-			return getTransportClient().bulk(bulk).actionGet();
-		} else {
-			return getRESTClient().bulk(bulk);
 		}
 	}
 
@@ -731,95 +755,124 @@ public final class ElasticSearchUtils {
 	}
 
 	/**
-	 * @param <T> type of ES Response
-	 * @return a callback for handling ES response errors
+	 * @param requests a list of index/delete requests,
 	 */
-	public static <T extends DocWriteResponse> ActionListener<T> getIndexResponseHandler() {
-		return getIndexResponseHandler(null, null);
-	}
-
-	/**
-	 * @param <T> type of ES Response
-	 * @param onSuccess success callback
-	 * @param onFailure failure callback
-	 * @return a callback for handling ES response errors
-	 */
-	public static <T extends DocWriteResponse> ActionListener<T> getIndexResponseHandler(Consumer<T> onSuccess,
-			Consumer<Exception> onFailure) {
-		return new ActionListener<T>() {
-			public void onResponse(T response) {
-				int status = response.status().getStatus();
-				if (status >= 400) {
-					logger.warn("Indexing/unindexing object {}/{} might have failed - status {}.",
-							response.getIndex(), response.getId(), status);
+	static void executeRequests(List<DocWriteRequest<?>> requests) {
+		if (requests == null || requests.isEmpty()) {
+			return;
+		}
+		ActionListener<BulkResponse> listener = getSyncRequestListener();
+		try {
+			if (USE_TRANSPORT_CLIENT) {
+				BulkProcessor bp = bulkProcessor(getTransportClient());
+				if (asyncEnabled()) {
+					requests.forEach(bp::add);
+					if (flushImmediately()) {
+						bp.flush();
+					}
+				} else {
+					BulkRequest bulk = new BulkRequest();
+					requests.forEach(bulk::add);
+					listener.onResponse(getTransportClient().bulk(bulk).actionGet());
 				}
-				if (onSuccess != null) {
-					onSuccess.accept(response);
+			} else {
+				BulkProcessor bp = bulkProcessor(getRESTClient());
+				if (asyncEnabled()) {
+					requests.forEach(bp::add);
+					if (flushImmediately()) {
+						bp.flush();
+					}
+				} else {
+					BulkRequest bulk = new BulkRequest();
+					requests.forEach(bulk::add);
+					listener.onResponse(getRESTClient().bulk(bulk));
 				}
 			}
-			public void onFailure(Exception e) {
-				logger.error("Indexing/unindexing failure: {}", e);
-				if (onFailure != null) {
-					onFailure.accept(e);
-				}
-			}
-		};
-	}
-
-	/**
-	 * @return a callback for handling ES response errors for bulk requests
-	 */
-	public static ActionListener<BulkResponse> getBulkIndexResponseHandler() {
-		return getBulkIndexResponseHandler(null, null);
-	}
-
-	/**
-	 * @param onSuccess success callback
-	 * @param onFailure failure callback
-	 * @return a callback for handling ES response errors for bulk requests
-	 */
-	public static ActionListener<BulkResponse> getBulkIndexResponseHandler(Consumer<BulkResponse> onSuccess,
-			Consumer<Exception> onFailure) {
-		return new ActionListener<BulkResponse>() {
-			public void onResponse(BulkResponse response) {
-				int status = response.status().getStatus();
-				if (response.hasFailures() || status >= 400) {
-					logger.warn("Bulk operation might have failed - status {}. Reason: {}",
-							status, response.buildFailureMessage());
-				}
-				if (onSuccess != null) {
-					onSuccess.accept(response);
-				}
-			}
-			public void onFailure(Exception e) {
-				logger.error("Bulk failure: {}", e);
-				if (onFailure != null) {
-					onFailure.accept(e);
-				}
-			}
-		};
-	}
-
-	/**
-	 * @param dao DAO
-	 * @param appid app id
-	 * @param po Para object
-	 */
-	public static void handleFailedIndexing(DAO dao, String appid, ParaObject po) {
-		if (Config.getConfigBoolean("es.fail_on_indexing_errors", false)) {
-			throw new RuntimeException("Failed to index object " + po.getId() + "!");
+		} catch (Exception e) {
+			listener.onFailure(e);
 		}
 	}
 
-	/**
-	 * @param <P> type
-	 * @param dao DAO
-	 * @param appid app id
-	 * @param objects list of Para objects
-	 */
-	public static <P extends Object & ParaObject> void handleFailedBulkIndexing(DAO dao, String appid, List<P> objects) {
+	private static BulkProcessor bulkProcessor(RestHighLevelClient client) {
+		if (bulkProcessor == null) {
+			bulkProcessor = configureBulkProcessor(BulkProcessor.builder((request, bulkListener) ->
+					client.bulkAsync(request, bulkListener), getAsyncRequestListener()));
+		}
+		return bulkProcessor;
+	}
+
+	private static BulkProcessor bulkProcessor(Client client) {
+		if (bulkProcessor == null) {
+			bulkProcessor = configureBulkProcessor(BulkProcessor.builder(client, getAsyncRequestListener()));
+		}
+		return bulkProcessor;
+	}
+
+	private static BulkProcessor configureBulkProcessor(BulkProcessor.Builder builder) {
+		final int sizeLimit = Config.getConfigInt("es.bulk.size_limit_mb", 5);
+		final int actionLimit = Config.getConfigInt("es.bulk.action_limit", 1000);
+		final int concurrentRequests = Config.getConfigInt("es.bulk.concurrent_requests", 1);
+		final int flushInterval = Config.getConfigInt("es.bulk.flush_interval_ms", 5000);
+		final int backoffInitialDelayMs = Config.getConfigInt("es.bulk.backoff_initial_delay_ms", 50);
+		final int backoffNumRetries = Config.getConfigInt("es.bulk.max_num_retries", 8);
+		builder.setBulkSize(new ByteSizeValue(sizeLimit, ByteSizeUnit.MB));
+		builder.setBulkActions(actionLimit);
+		builder.setConcurrentRequests(concurrentRequests);
+		if (flushInterval > 0) {
+			builder.setFlushInterval(TimeValue.timeValueMillis(flushInterval));
+		}
+		if (backoffNumRetries > 0) {
+			builder.setBackoffPolicy(BackoffPolicy.
+					exponentialBackoff(TimeValue.timeValueMillis(backoffInitialDelayMs), backoffNumRetries));
+		} else {
+			builder.setBackoffPolicy(BackoffPolicy.noBackoff());
+		}
+		return builder.build();
+	}
+
+	private static BulkProcessor.Listener getAsyncRequestListener() {
+		return new BulkProcessor.Listener() {
+			public void beforeBulk(long executionId, BulkRequest request) { }
+
+			public void afterBulk(long executionId, BulkRequest request, BulkResponse response) {
+				if (response != null && response.hasFailures()) {
+					Arrays.stream(response.getItems()).filter(BulkItemResponse::isFailed).forEach(item -> {
+						//FUTURE: Increment counter metric for failed document indexing
+						logger.error("Failed to execute async {} operation for index '{}', document id '{}': ",
+								item.getOpType(), item.getIndex(), item.getId(), item.getFailure().getMessage());
+					});
+				}
+			}
+
+			public void afterBulk(long executionId, BulkRequest request, Throwable throwable) {
+				//FUTURE: Increment counter metric for failed indexing requests
+				logger.error("Asynchronous indexing operation failed.", throwable);
+			}
+		};
+	};
+
+	private static ActionListener<BulkResponse> getSyncRequestListener() {
+		if (syncListener == null) {
+			syncListener = new ActionListener<BulkResponse>() {
+				public void onResponse(BulkResponse response) {
+					int status = response.status().getStatus();
+					if (response.hasFailures() || status >= 400) {
+						logger.warn("Bulk operation might have failed - status {}. Reason: {}",
+								status, response.buildFailureMessage());
+					}
+				}
+				public void onFailure(Exception e) {
+					logger.error("Bulk failure: {}", e);
+					handleFailedRequests(e);
+				}
+			};
+		}
+		return syncListener;
+	}
+
+	private static void handleFailedRequests(Throwable t) {
 		if (Config.getConfigBoolean("es.fail_on_indexing_errors", false)) {
-			throw new RuntimeException("Failed to index " + objects.size() + " objects!");
+			throw new RuntimeException("Failed to index object(s)!", t);
 		}
 	}
 
@@ -847,13 +900,6 @@ public final class ElasticSearchUtils {
 			logger.error(null, e);
 		}
 		return false;
-	}
-
-	/**
-	 * @return true if asynchronous indexing/unindexing is enabled.
-	 */
-	static boolean isAsyncEnabled() {
-		return Config.getConfigBoolean("es.async_enabled", false);
 	}
 
 	/**
