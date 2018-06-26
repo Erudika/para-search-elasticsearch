@@ -83,6 +83,7 @@ import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequest;
 import org.elasticsearch.action.admin.indices.exists.indices.IndicesExistsRequest;
 import org.elasticsearch.action.admin.indices.get.GetIndexRequest;
 import org.elasticsearch.action.admin.indices.get.GetIndexResponse;
+import org.elasticsearch.action.admin.indices.refresh.RefreshRequest;
 import org.elasticsearch.action.bulk.BackoffPolicy;
 import org.elasticsearch.action.bulk.BulkItemResponse;
 import org.elasticsearch.action.bulk.BulkProcessor;
@@ -527,12 +528,22 @@ public final class ElasticSearchUtils {
 	}
 
 	/**
-	 * Executes an index refresh request.
+	 * Executes a synchronous index refresh request. Also flushes
 	 * @param appid the appid / index alias
 	 */
-	public static void refreshIndex(String appid) {
+	public static void refreshIndex(String appid) throws IOException {
 		if (!StringUtils.isBlank(appid)) {
-			getTransportClient().admin().indices().prepareRefresh(getIndexName(appid)).get();
+			if (USE_TRANSPORT_CLIENT) {
+				if (asyncEnabled()) {
+					bulkProcessor(getTransportClient()).flush();
+				}
+				getTransportClient().admin().indices().prepareRefresh(getIndexName(appid)).get();
+			} else {
+				if (asyncEnabled()) {
+					bulkProcessor(getRESTClient()).flush();
+				}
+				getRESTClient().indices().refresh(new RefreshRequest(getIndexName(appid)));
+			}
 		}
 	}
 
@@ -764,8 +775,8 @@ public final class ElasticSearchUtils {
 		ActionListener<BulkResponse> listener = getSyncRequestListener();
 		try {
 			if (USE_TRANSPORT_CLIENT) {
-				BulkProcessor bp = bulkProcessor(getTransportClient());
 				if (asyncEnabled()) {
+					BulkProcessor bp = bulkProcessor(getTransportClient());
 					requests.forEach(bp::add);
 					if (flushImmediately()) {
 						bp.flush();
@@ -776,8 +787,8 @@ public final class ElasticSearchUtils {
 					listener.onResponse(getTransportClient().bulk(bulk).actionGet());
 				}
 			} else {
-				BulkProcessor bp = bulkProcessor(getRESTClient());
 				if (asyncEnabled()) {
+					BulkProcessor bp = bulkProcessor(getRESTClient());
 					requests.forEach(bp::add);
 					if (flushImmediately()) {
 						bp.flush();
