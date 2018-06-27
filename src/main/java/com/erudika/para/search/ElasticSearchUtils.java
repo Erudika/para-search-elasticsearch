@@ -530,6 +530,7 @@ public final class ElasticSearchUtils {
 	/**
 	 * Executes a synchronous index refresh request. Also flushes
 	 * @param appid the appid / index alias
+	 * @throws IOException exception
 	 */
 	public static void refreshIndex(String appid) throws IOException {
 		if (!StringUtils.isBlank(appid)) {
