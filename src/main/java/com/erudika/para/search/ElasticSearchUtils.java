@@ -466,9 +466,14 @@ public final class ElasticSearchUtils {
 		}
 		try {
 			String indexName = app.getAppIdentifier().trim();
-			if (!app.isShared() && !existsIndex(indexName)) {
-				logger.info("Creating '{}' index because it doesn't exist.", indexName);
-				createIndex(indexName);
+			if (!existsIndex(indexName)) {
+				if (app.isShared()) {
+					// add alias pointing to the root index
+					addIndexAliasWithRouting(getIndexName(Config.getRootAppIdentifier()), app.getAppIdentifier());
+				} else {
+					logger.info("Creating '{}' index because it doesn't exist.", indexName);
+					createIndex(indexName);
+				}
 			}
 			String oldName = getIndexNameForAlias(indexName);
 			String newName = indexName;
