@@ -169,7 +169,7 @@ public final class ElasticSearchUtils {
 	 * @return true if we want the bulk processor to flush immediately after each bulk request.
 	 */
 	static boolean flushImmediately() {
-		return Config.getConfigBoolean("es.bulk.flush_immediately", false);
+		return Config.getConfigBoolean("es.bulk.flush_immediately", true);
 	}
 
 	/**
