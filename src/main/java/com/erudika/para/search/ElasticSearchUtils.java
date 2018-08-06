@@ -315,11 +315,13 @@ public final class ElasticSearchUtils {
 				closed = bulkProcessor.awaitClose(10, TimeUnit.MINUTES);
 			} catch (InterruptedException ex) {
 				logger.warn("Interrupted waiting for BulkProcessor to close.", ex);
+				Thread.currentThread().interrupt();
+			} finally {
+				if (!closed) {
+					bulkProcessor.close();
+				}
+				bulkProcessor = null;
 			}
-			if (!closed) {
-				bulkProcessor.close();
-			}
-			bulkProcessor = null;
 		}
 	}
 

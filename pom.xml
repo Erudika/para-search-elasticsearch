@@ -55,7 +55,7 @@
 		<skipTests>false</skipTests>
 		<skipITs>${skipTests}</skipITs>
 		<skipUTs>${skipTests}</skipUTs>
-		<elasticsearch.version>6.3.1</elasticsearch.version>
+		<elasticsearch.version>6.3.2</elasticsearch.version>
 		<jerseyVer>2.27</jerseyVer>
 	</properties>
 
@@ -63,7 +63,7 @@
 		<dependency>
 			<groupId>com.erudika</groupId>
 			<artifactId>para-core</artifactId>
-			<version>1.29.2</version>
+			<version>1.30.0</version>
 			<scope>provided</scope>
 		</dependency>
 		<dependency>
@@ -265,7 +265,7 @@
 			<plugin>
 				<groupId>org.codehaus.mojo</groupId>
 				<artifactId>sonar-maven-plugin</artifactId>
-				<version>3.4.0.905</version>
+				<version>3.4.1.1168</version>
 			</plugin>
 		</plugins>
 	</build>
@@ -298,7 +298,7 @@
 					<plugin>
 						<groupId>org.apache.maven.plugins</groupId>
 						<artifactId>maven-javadoc-plugin</artifactId>
-						<version>2.10.4</version>
+						<version>3.0.1</version>
 						<executions>
 							<execution>
 								<id>attach-javadocs</id>
