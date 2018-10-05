@@ -64,8 +64,8 @@ public class ElasticSearchIT extends SearchTest {
 		ElasticSearchUtils.deleteIndex(appid1);
 		ElasticSearchUtils.deleteIndex(appid2);
 		ElasticSearchUtils.deleteIndex(appid3);
-		ElasticSearchUtils.shutdownClient();
 		SearchTest.cleanup();
+		ElasticSearchUtils.shutdownClient();
 	}
 
 	@Test

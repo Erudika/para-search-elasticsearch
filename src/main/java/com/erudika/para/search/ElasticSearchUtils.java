@@ -91,6 +91,7 @@ import org.elasticsearch.action.bulk.BulkRequest;
 import org.elasticsearch.action.bulk.BulkResponse;
 import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.client.Client;
+import org.elasticsearch.client.RequestOptions;
 import org.elasticsearch.client.Response;
 import org.elasticsearch.client.RestClient;
 import org.elasticsearch.client.RestClientBuilder;
@@ -354,7 +355,7 @@ public final class ElasticSearchUtils {
 			if (USE_TRANSPORT_CLIENT) {
 				getTransportClient().admin().indices().create(create).actionGet();
 			} else {
-				getRESTClient().indices().create(create);
+				getRESTClient().indices().create(create, RequestOptions.DEFAULT);
 			}
 			logger.info("Created a new index '{}' with {} shards, {} replicas.", name, shards, replicas);
 		} catch (Exception e) {
@@ -414,7 +415,7 @@ public final class ElasticSearchUtils {
 			if (USE_TRANSPORT_CLIENT) {
 				getTransportClient().admin().indices().delete(delete).actionGet();
 			} else {
-				getRESTClient().indices().delete(delete);
+				getRESTClient().indices().delete(delete, RequestOptions.DEFAULT);
 			}
 		} catch (Exception e) {
 			logger.warn(null, e);
@@ -441,7 +442,7 @@ public final class ElasticSearchUtils {
 				exists = getTransportClient().admin().indices().exists(get).actionGet().isExists();
 			} else {
 				GetIndexRequest get = new GetIndexRequest().indices(indexName);
-				exists = getRESTClient().indices().exists(get);
+				exists = getRESTClient().indices().exists(get, RequestOptions.DEFAULT);
 			}
 		} catch (Exception e) {
 			logger.warn(null, e);
@@ -550,7 +551,7 @@ public final class ElasticSearchUtils {
 				if (asyncEnabled()) {
 					bulkProcessor(getRESTClient()).flush();
 				}
-				getRESTClient().indices().refresh(new RefreshRequest(getIndexName(appid)));
+				getRESTClient().indices().refresh(new RefreshRequest(getIndexName(appid)), RequestOptions.DEFAULT);
 			}
 		}
 	}
@@ -635,7 +636,7 @@ public final class ElasticSearchUtils {
 			if (USE_TRANSPORT_CLIENT) {
 				return getTransportClient().admin().indices().aliases(actions).actionGet().isAcknowledged();
 			} else {
-				return getRESTClient().indices().updateAliases(actions).isAcknowledged();
+				return getRESTClient().indices().updateAliases(actions, RequestOptions.DEFAULT).isAcknowledged();
 			}
 		} catch (Exception e) {
 			logger.error(null, e);
@@ -661,7 +662,7 @@ public final class ElasticSearchUtils {
 			if (USE_TRANSPORT_CLIENT) {
 				return getTransportClient().admin().indices().aliases(actions).actionGet().isAcknowledged();
 			} else {
-				return getRESTClient().indices().updateAliases(actions).isAcknowledged();
+				return getRESTClient().indices().updateAliases(actions, RequestOptions.DEFAULT).isAcknowledged();
 			}
 		} catch (Exception e) {
 			logger.error(null, e);
@@ -686,7 +687,7 @@ public final class ElasticSearchUtils {
 			if (USE_TRANSPORT_CLIENT) {
 				return getTransportClient().admin().indices().aliasesExist(getAlias).actionGet().exists();
 			} else {
-				return getRESTClient().indices().existsAlias(getAlias);
+				return getRESTClient().indices().existsAlias(getAlias, RequestOptions.DEFAULT);
 			}
 		} catch (Exception e) {
 			logger.error(null, e);
@@ -717,7 +718,7 @@ public final class ElasticSearchUtils {
 			if (USE_TRANSPORT_CLIENT) {
 				getTransportClient().admin().indices().aliases(actions).actionGet();
 			} else {
-				getRESTClient().indices().updateAliases(actions);
+				getRESTClient().indices().updateAliases(actions, RequestOptions.DEFAULT);
 			}
 			// delete the old index
 			if (deleteOld) {
@@ -746,7 +747,8 @@ public final class ElasticSearchUtils {
 				}
 			} else {
 				String path = "/" + appid;
-				Response resp = getRESTClient().getLowLevelClient().performRequest("GET", path);
+				org.elasticsearch.client.Request request = new org.elasticsearch.client.Request("GET", path);
+				Response resp = getRESTClient().getLowLevelClient().performRequest(request);
 				HttpEntity entity = resp.getEntity();
 				if (entity != null && entity.getContent() != null) {
 					JsonNode tree = ParaObjectUtils.getJsonMapper().readTree(entity.getContent());
@@ -804,7 +806,7 @@ public final class ElasticSearchUtils {
 				} else {
 					BulkRequest bulk = new BulkRequest();
 					requests.forEach(bulk::add);
-					listener.onResponse(getRESTClient().bulk(bulk));
+					listener.onResponse(getRESTClient().bulk(bulk, RequestOptions.DEFAULT));
 				}
 			}
 		} catch (Exception e) {
@@ -815,7 +817,7 @@ public final class ElasticSearchUtils {
 	private static BulkProcessor bulkProcessor(RestHighLevelClient client) {
 		if (bulkProcessor == null) {
 			bulkProcessor = configureBulkProcessor(BulkProcessor.builder((request, bulkListener) ->
-					client.bulkAsync(request, bulkListener), getAsyncRequestListener()));
+					client.bulkAsync(request, RequestOptions.DEFAULT, bulkListener), getAsyncRequestListener()));
 		}
 		return bulkProcessor;
 	}
@@ -917,7 +919,8 @@ public final class ElasticSearchUtils {
 						getStatus().equals(ClusterHealthStatus.RED);
 			} else {
 				String path = "/_cluster/health";
-				Response resp = getRESTClient().getLowLevelClient().performRequest("GET", path);
+				org.elasticsearch.client.Request request = new org.elasticsearch.client.Request("GET", path);
+				Response resp = getRESTClient().getLowLevelClient().performRequest(request);
 				HttpEntity entity = resp.getEntity();
 				if (entity != null && entity.getContent() != null) {
 					JsonNode health = ParaObjectUtils.getJsonMapper().readTree(entity.getContent());
@@ -1159,7 +1162,8 @@ public final class ElasticSearchUtils {
 	 * @return a range query
 	 */
 	static QueryBuilder range(String operator, String field, String stringValue) {
-		String key = StringUtils.replaceAll(field, "[<>=\\s]+$", "");
+		Objects.requireNonNull(field);
+		String key = field.replaceAll("[<>=\\s]+$", "");
 		boolean nestedMode = nestedMode() && field.startsWith(PROPS_PREFIX);
 		RangeQueryBuilder rfb = rangeQuery(nestedMode ? getValueFieldName(stringValue) : key);
 		if (">".equals(operator)) {
@@ -1238,7 +1242,7 @@ public final class ElasticSearchUtils {
 		} else if (q instanceof WildcardQuery) {
 			qb = wildcard(q);
 		} else {
-			logger.warn("Unknown query type in nested mode query syntax: {}", q.getClass());
+			logger.warn("Unknown query type in nested mode query syntax: {}", q);
 		}
 		return (qb == null) ? matchAllQuery() : qb;
 	}

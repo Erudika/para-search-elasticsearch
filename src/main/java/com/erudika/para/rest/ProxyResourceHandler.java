@@ -56,6 +56,8 @@ import org.apache.http.client.utils.URIBuilder;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.InputStreamEntity;
 import org.apache.http.message.BasicHeader;
+import org.elasticsearch.client.Request;
+import org.elasticsearch.client.RequestOptions;
 import org.elasticsearch.client.RestClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -126,11 +128,18 @@ public class ProxyResourceHandler implements CustomResourceHandler {
 			HttpEntity resp;
 			RestClient client = getClient();
 			if (client != null) {
+				org.elasticsearch.client.Request esRequest = new Request(method, path);
+				RequestOptions.Builder opts = RequestOptions.DEFAULT.toBuilder();
+				for (Header header : headers) {
+					opts.addHeader(header.getName(), header.getValue());
+				}
+				esRequest.setOptions(opts);
 				if (ctx.getEntityStream() != null && ctx.getEntityStream().available() > 0) {
 					HttpEntity body = new InputStreamEntity(ctx.getEntityStream(), ContentType.APPLICATION_JSON);
-					resp = client.performRequest(method, path, Collections.emptyMap(), body, headers).getEntity();
+					esRequest.setEntity(body);
+					resp = client.performRequest(esRequest).getEntity();
 				} else {
-					resp = client.performRequest(method, path, headers).getEntity();
+					resp = client.performRequest(esRequest).getEntity();
 				}
 				if (resp != null && resp.getContent() != null) {
 					Header type = resp.getContentType();

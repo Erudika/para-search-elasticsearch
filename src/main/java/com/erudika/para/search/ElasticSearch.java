@@ -93,6 +93,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import static com.erudika.para.search.ElasticSearchUtils.executeRequests;
 import org.elasticsearch.action.DocWriteRequest;
+import org.elasticsearch.client.RequestOptions;
 
 /**
  * An implementation of the {@link Search} interface using ElasticSearch.
@@ -204,7 +205,7 @@ public class ElasticSearch implements Search {
 			if (USE_TRANSPORT_CLIENT) {
 				scrollResp = getTransportClient().search(search).actionGet();
 			} else {
-				scrollResp = getRESTClient().search(search);
+				scrollResp = getRESTClient().search(search, RequestOptions.DEFAULT);
 			}
 
 			List<DocWriteRequest<?>> batch = new LinkedList<>();
@@ -225,7 +226,7 @@ public class ElasticSearch implements Search {
 				if (USE_TRANSPORT_CLIENT) {
 					scrollResp = getTransportClient().searchScroll(scroll).actionGet();
 				} else {
-					scrollResp = getRESTClient().searchScroll(scroll);
+					scrollResp = getRESTClient().scroll(scroll, RequestOptions.DEFAULT);
 				}
 				if (scrollResp.getHits().getHits().length == 0) {
 					break;
@@ -561,7 +562,7 @@ public class ElasticSearch implements Search {
 			if (USE_TRANSPORT_CLIENT) {
 				hits = getTransportClient().search(search).actionGet().getHits();
 			} else {
-				hits = getRESTClient().search(search).getHits();
+				hits = getRESTClient().search(search, RequestOptions.DEFAULT).getHits();
 			}
 			page.setCount(hits.getTotalHits());
 			if (hits.getHits().length > 0) {
@@ -597,7 +598,7 @@ public class ElasticSearch implements Search {
 			if (USE_TRANSPORT_CLIENT) {
 				gres = getTransportClient().get(get).actionGet();
 			} else {
-				gres = getRESTClient().get(get);
+				gres = getRESTClient().get(get, RequestOptions.DEFAULT);
 			}
 			if (gres.isExists()) {
 				map = gres.getSource();
@@ -629,7 +630,7 @@ public class ElasticSearch implements Search {
 			if (USE_TRANSPORT_CLIENT) {
 				count = getTransportClient().search(search).actionGet().getHits().getTotalHits();
 			} else {
-				count = getRESTClient().search(search).getHits().getTotalHits();
+				count = getRESTClient().search(search, RequestOptions.DEFAULT).getHits().getTotalHits();
 			}
 		} catch (Exception e) {
 			Throwable cause = e.getCause();
@@ -655,7 +656,7 @@ public class ElasticSearch implements Search {
 				if (USE_TRANSPORT_CLIENT) {
 					count = getTransportClient().search(search).actionGet().getHits().getTotalHits();
 				} else {
-					count = getRESTClient().search(search).getHits().getTotalHits();
+					count = getRESTClient().search(search, RequestOptions.DEFAULT).getHits().getTotalHits();
 				}
 			} catch (Exception e) {
 				Throwable cause = e.getCause();
