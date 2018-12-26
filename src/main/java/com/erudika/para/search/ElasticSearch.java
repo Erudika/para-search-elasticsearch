@@ -120,7 +120,9 @@ public class ElasticSearch implements Search {
 	public ElasticSearch(DAO dao) {
 		this.dao = dao;
 		if (Config.isSearchEnabled()) {
-			ElasticSearchUtils.initClient();
+			if (Config.getConfigParam("search", "").equalsIgnoreCase(ElasticSearch.class.getSimpleName())) {
+				ElasticSearchUtils.initClient();
+			}
 			// set up automatic index creation and deletion
 			App.addAppCreatedListener((App app) -> {
 				if (app != null) {
