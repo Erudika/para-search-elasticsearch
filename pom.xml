@@ -55,7 +55,7 @@
 		<skipTests>false</skipTests>
 		<skipITs>${skipTests}</skipITs>
 		<skipUTs>${skipTests}</skipUTs>
-		<elasticsearch.version>6.4.1</elasticsearch.version>
+		<elasticsearch.version>6.5.4</elasticsearch.version>
 		<jerseyVer>2.27</jerseyVer>
 	</properties>
 
@@ -63,7 +63,7 @@
 		<dependency>
 			<groupId>com.erudika</groupId>
 			<artifactId>para-core</artifactId>
-			<version>1.31.0</version>
+			<version>1.31.1</version>
 			<scope>provided</scope>
 		</dependency>
 		<dependency>
@@ -105,7 +105,7 @@
 		<dependency>
 			<groupId>org.mockito</groupId>
 			<artifactId>mockito-core</artifactId>
-			<version>2.22.0</version>
+			<version>2.23.4</version>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
@@ -165,7 +165,7 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-shade-plugin</artifactId>
-				<version>3.2.0</version>
+				<version>3.2.1</version>
 				<executions>
 					<execution>
 						<phase>package</phase>
@@ -196,7 +196,7 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-failsafe-plugin</artifactId>
-				<version>2.22.0</version>
+				<version>2.22.1</version>
 				<executions>
 					<execution>
 						<goals>
@@ -270,7 +270,7 @@
 			<plugin>
 				<groupId>org.codehaus.mojo</groupId>
 				<artifactId>sonar-maven-plugin</artifactId>
-				<version>3.5.0.1254</version>
+				<version>3.6.0.1398</version>
 			</plugin>
 		</plugins>
 	</build>

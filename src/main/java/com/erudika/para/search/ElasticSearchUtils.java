@@ -176,7 +176,7 @@ public final class ElasticSearchUtils {
 	/**
 	 * A list of default mappings that are defined upon index creation.
 	 */
-	private static String getDefaultMapping() {
+	static String getDefaultMapping() {
 		return "{\n" +
 			"  \"paraobject\": {\n" +
 			"    \"properties\": {\n" +

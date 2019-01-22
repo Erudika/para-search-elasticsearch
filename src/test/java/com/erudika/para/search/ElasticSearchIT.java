@@ -244,7 +244,7 @@ public class ElasticSearchIT extends SearchTest {
 		List<ParaObject> r31 = s.findQuery(indexInNestedMode, "cat", "\"Kitty 2\" AND properties.owner.age:34");
 		List<ParaObject> r32 = s.findQuery(indexInNestedMode, "cat", "timestamp:{12345678 TO *} AND properties.owner.age:{* TO 34]");
 		List<ParaObject> r33 = s.findQuery(indexInNestedMode, "cat", "-properties.owner.age:[* TO 33]");
-		List<ParaObject> r34 = s.findQuery(indexInNestedMode, "cat", "chris");
+		List<ParaObject> r34 = s.findQuery(indexInNestedMode, "cat", "properties.owner.name:Chris");
 		List<ParaObject> r35 = s.findQuery(indexInNestedMode, "cat", "properties.owner.age:[* TO *]");
 		List<ParaObject> r36 = s.findQuery(indexInNestedMode, "cat", "properties.owner.nestedArray[1].sk:two2");
 		assertTrue(s.findQuery(indexInNestedMode, "cat", "dog AND properties.owner.age:34").isEmpty());
@@ -311,5 +311,16 @@ public class ElasticSearchIT extends SearchTest {
 		s.unindexAll(indexInNestedMode, Arrays.asList(c1, c2, c3));
 		ElasticSearchUtils.deleteIndex(indexInNestedMode);
 		System.setProperty("para.es.use_nested_custom_fields", "false");
+	}
+
+	@Test
+	public void testNestedMapping() {
+		System.setProperty("para.es.use_nested_custom_fields", "true");
+		String n = ElasticSearchUtils.getDefaultMapping();
+		assertTrue(n.contains("\"properties\": {\"type\": \"nested\"},"));
+
+		System.setProperty("para.es.use_nested_custom_fields", "false");
+		n = ElasticSearchUtils.getDefaultMapping();
+		assertTrue(n.contains("\"properties\": {\"type\": \"object\"},"));
 	}
 }
