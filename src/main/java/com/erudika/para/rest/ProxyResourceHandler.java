@@ -17,6 +17,8 @@
  */
 package com.erudika.para.rest;
 
+import com.erudika.para.DestroyListener;
+import com.erudika.para.Para;
 import com.erudika.para.core.App;
 import com.erudika.para.core.ParaObject;
 import com.erudika.para.core.utils.CoreUtils;
@@ -159,8 +161,8 @@ public class ProxyResourceHandler implements CustomResourceHandler {
 		}
 		try {
 			lowLevelClient = RestClient.builder(new HttpHost(esHost, esPort, esScheme)).build();
-			Runtime.getRuntime().addShutdownHook(new Thread() {
-				public void run() {
+			Para.addDestroyListener(new DestroyListener() {
+				public void onDestroy() {
 					if (lowLevelClient != null) {
 						try {
 							lowLevelClient.close();

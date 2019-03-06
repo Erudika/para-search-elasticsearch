@@ -24,6 +24,8 @@ import com.amazonaws.auth.AWS4Signer;
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.http.HttpMethodName;
+import com.erudika.para.DestroyListener;
+import com.erudika.para.Para;
 import com.erudika.para.core.App;
 import com.erudika.para.core.ParaObject;
 import com.erudika.para.core.Sysprop;
@@ -253,8 +255,8 @@ public final class ElasticSearchUtils {
 		}
 		searchClient.addTransportAddress(addr);
 
-		Runtime.getRuntime().addShutdownHook(new Thread() {
-			public void run() {
+		Para.addDestroyListener(new DestroyListener() {
+			public void onDestroy() {
 				shutdownClient();
 			}
 		});
@@ -284,8 +286,8 @@ public final class ElasticSearchUtils {
 		}
 		restClient = new RestHighLevelClient(clientBuilder);
 
-		Runtime.getRuntime().addShutdownHook(new Thread() {
-			public void run() {
+		Para.addDestroyListener(new DestroyListener() {
+			public void onDestroy() {
 				shutdownClient();
 			}
 		});
