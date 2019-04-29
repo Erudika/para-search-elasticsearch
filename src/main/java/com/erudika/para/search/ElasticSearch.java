@@ -25,15 +25,12 @@ import com.erudika.para.core.utils.CoreUtils;
 import com.erudika.para.persistence.DAO;
 import static com.erudika.para.search.ElasticSearchUtils.PROPS_PREFIX;
 import static com.erudika.para.search.ElasticSearchUtils.PROPS_REGEX;
-import static com.erudika.para.search.ElasticSearchUtils.USE_TRANSPORT_CLIENT;
 import static com.erudika.para.search.ElasticSearchUtils.convertQueryStringToNestedQuery;
 import static com.erudika.para.search.ElasticSearchUtils.getIndexName;
 import static com.erudika.para.search.ElasticSearchUtils.getNestedKey;
 import static com.erudika.para.search.ElasticSearchUtils.getPager;
 import static com.erudika.para.search.ElasticSearchUtils.getRESTClient;
 import static com.erudika.para.search.ElasticSearchUtils.getTermsQuery;
-import static com.erudika.para.search.ElasticSearchUtils.getTransportClient;
-import static com.erudika.para.search.ElasticSearchUtils.getType;
 import static com.erudika.para.search.ElasticSearchUtils.getValueFieldName;
 import static com.erudika.para.search.ElasticSearchUtils.keyValueBoolQuery;
 import static com.erudika.para.search.ElasticSearchUtils.nestedMode;
@@ -166,7 +163,7 @@ public class ElasticSearch implements Search {
 		try {
 			executeRequests(objects.stream().
 					filter(Objects::nonNull).
-					map(obj -> new IndexRequest(getIndexName(appid), getType(), obj.getId()).
+					map(obj -> new IndexRequest(getIndexName(appid)).id(obj.getId()).
 						source(ElasticSearchUtils.getSourceFromParaObject(obj))).
 					collect(Collectors.toList()));
 			logger.debug("Search.indexAll() {}", objects.size());
@@ -182,7 +179,7 @@ public class ElasticSearch implements Search {
 		try {
 			executeRequests(objects.stream().
 					filter(Objects::nonNull).
-					map(obj -> new DeleteRequest(getIndexName(appid), getType(), obj.getId())).
+					map(obj -> new DeleteRequest(getIndexName(appid)).id(obj.getId())).
 					collect(Collectors.toList()));
 			logger.debug("Search.unindexAll() {}", objects.size());
 		} catch (Exception e) {
@@ -198,23 +195,17 @@ public class ElasticSearch implements Search {
 			int batchSize = Config.getConfigInt("unindex_batch_size", 1000);
 			int unindexedCount = 0;
 			long time = System.nanoTime();
-			SearchResponse scrollResp;
 			QueryBuilder fb = (terms == null || terms.isEmpty()) ? matchAllQuery() : getTermsQuery(terms, matchAll);
 			SearchRequest search = new SearchRequest(getIndexName(appid)).
 					scroll(new TimeValue(60000)).
 					source(SearchSourceBuilder.searchSource().query(fb).size(batchSize));
-
-			if (USE_TRANSPORT_CLIENT) {
-				scrollResp = getTransportClient().search(search).actionGet();
-			} else {
-				scrollResp = getRESTClient().search(search, RequestOptions.DEFAULT);
-			}
+			SearchResponse scrollResp = getRESTClient().search(search, RequestOptions.DEFAULT);
 
 			List<DocWriteRequest<?>> batch = new LinkedList<>();
 			while (true) {
 				batch.addAll(Arrays.stream(scrollResp.getHits().getHits()).
 						filter(Objects::nonNull).
-						map(hit -> new DeleteRequest(getIndexName(appid), getType(), hit.getId())).
+						map(hit -> new DeleteRequest(getIndexName(appid)).id(hit.getId())).
 						collect(Collectors.toList()));
 
 				if (batch.size() >= batchSize) {
@@ -225,11 +216,7 @@ public class ElasticSearch implements Search {
 				// next page
 				SearchScrollRequest scroll = new SearchScrollRequest(scrollResp.getScrollId()).
 						scroll(new TimeValue(60000));
-				if (USE_TRANSPORT_CLIENT) {
-					scrollResp = getTransportClient().searchScroll(scroll).actionGet();
-				} else {
-					scrollResp = getRESTClient().scroll(scroll, RequestOptions.DEFAULT);
-				}
+				scrollResp = getRESTClient().scroll(scroll, RequestOptions.DEFAULT);
 				if (scrollResp.getHits().getHits().length == 0) {
 					break;
 				}
@@ -561,12 +548,8 @@ public class ElasticSearch implements Search {
 
 			logger.debug("Elasticsearch query: {}", search.toString());
 
-			if (USE_TRANSPORT_CLIENT) {
-				hits = getTransportClient().search(search).actionGet().getHits();
-			} else {
-				hits = getRESTClient().search(search, RequestOptions.DEFAULT).getHits();
-			}
-			page.setCount(hits.getTotalHits());
+			hits = getRESTClient().search(search, RequestOptions.DEFAULT).getHits();
+			page.setCount(hits.getTotalHits().value);
 			if (hits.getHits().length > 0) {
 				Object id = hits.getAt(hits.getHits().length - 1).getSourceAsMap().get("_docid");
 				if (id != null) {
@@ -596,12 +579,7 @@ public class ElasticSearch implements Search {
 		}
 		try {
 			GetRequest get = new GetRequest().index(getIndexName(appid)).id(key);
-			GetResponse gres;
-			if (USE_TRANSPORT_CLIENT) {
-				gres = getTransportClient().get(get).actionGet();
-			} else {
-				gres = getRESTClient().get(get, RequestOptions.DEFAULT);
-			}
+			GetResponse gres = getRESTClient().get(get, RequestOptions.DEFAULT);
 			if (gres.isExists()) {
 				map = gres.getSource();
 			}
@@ -629,11 +607,7 @@ public class ElasticSearch implements Search {
 		try {
 			SearchRequest search = new SearchRequest(getIndexName(appid)).
 					source(SearchSourceBuilder.searchSource().size(0).query(query));
-			if (USE_TRANSPORT_CLIENT) {
-				count = getTransportClient().search(search).actionGet().getHits().getTotalHits();
-			} else {
-				count = getRESTClient().search(search, RequestOptions.DEFAULT).getHits().getTotalHits();
-			}
+			count = getRESTClient().search(search, RequestOptions.DEFAULT).getHits().getTotalHits().value;
 		} catch (Exception e) {
 			Throwable cause = e.getCause();
 			String msg = cause != null ? cause.getMessage() : e.getMessage();
@@ -655,11 +629,7 @@ public class ElasticSearch implements Search {
 			try {
 				SearchRequest search = new SearchRequest(getIndexName(appid)).
 					source(SearchSourceBuilder.searchSource().size(0).query(query));
-				if (USE_TRANSPORT_CLIENT) {
-					count = getTransportClient().search(search).actionGet().getHits().getTotalHits();
-				} else {
-					count = getRESTClient().search(search, RequestOptions.DEFAULT).getHits().getTotalHits();
-				}
+				count = getRESTClient().search(search, RequestOptions.DEFAULT).getHits().getTotalHits().value;
 			} catch (Exception e) {
 				Throwable cause = e.getCause();
 				String msg = cause != null ? cause.getMessage() : e.getMessage();

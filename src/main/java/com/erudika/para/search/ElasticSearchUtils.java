@@ -36,9 +36,7 @@ import com.erudika.para.utils.Pager;
 import com.erudika.para.utils.Utils;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.io.IOException;
-import java.net.InetAddress;
 import java.net.URI;
-import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -80,11 +78,7 @@ import org.elasticsearch.action.DocWriteRequest;
 import org.elasticsearch.action.admin.indices.alias.IndicesAliasesRequest;
 import org.elasticsearch.action.admin.indices.alias.IndicesAliasesRequest.AliasActions;
 import org.elasticsearch.action.admin.indices.alias.get.GetAliasesRequest;
-import org.elasticsearch.action.admin.indices.create.CreateIndexRequest;
 import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequest;
-import org.elasticsearch.action.admin.indices.exists.indices.IndicesExistsRequest;
-import org.elasticsearch.action.admin.indices.get.GetIndexRequest;
-import org.elasticsearch.action.admin.indices.get.GetIndexResponse;
 import org.elasticsearch.action.admin.indices.refresh.RefreshRequest;
 import org.elasticsearch.action.bulk.BackoffPolicy;
 import org.elasticsearch.action.bulk.BulkItemResponse;
@@ -92,16 +86,15 @@ import org.elasticsearch.action.bulk.BulkProcessor;
 import org.elasticsearch.action.bulk.BulkRequest;
 import org.elasticsearch.action.bulk.BulkResponse;
 import org.elasticsearch.action.index.IndexRequest;
-import org.elasticsearch.client.Client;
 import org.elasticsearch.client.RequestOptions;
 import org.elasticsearch.client.Response;
 import org.elasticsearch.client.RestClient;
 import org.elasticsearch.client.RestClientBuilder;
 import org.elasticsearch.client.RestHighLevelClient;
-import org.elasticsearch.client.transport.TransportClient;
+import org.elasticsearch.client.indices.CreateIndexRequest;
+import org.elasticsearch.client.indices.GetIndexRequest;
 import org.elasticsearch.cluster.health.ClusterHealthStatus;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.common.transport.TransportAddress;
 import org.elasticsearch.common.unit.ByteSizeUnit;
 import org.elasticsearch.common.unit.ByteSizeValue;
 import org.elasticsearch.common.unit.TimeValue;
@@ -123,7 +116,6 @@ import org.elasticsearch.index.query.RangeQueryBuilder;
 import org.elasticsearch.search.sort.SortBuilder;
 import org.elasticsearch.search.sort.SortBuilders;
 import org.elasticsearch.search.sort.SortOrder;
-import org.elasticsearch.transport.client.PreBuiltTransportClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -134,7 +126,6 @@ import org.slf4j.LoggerFactory;
 public final class ElasticSearchUtils {
 
 	private static final Logger logger = LoggerFactory.getLogger(ElasticSearchUtils.class);
-	private static TransportClient searchClient;
 	private static RestHighLevelClient restClient;
 	private static BulkProcessor bulkProcessor;
 	private static ActionListener<BulkResponse> syncListener;
@@ -146,7 +137,6 @@ public final class ElasticSearchUtils {
 	static final String PROPS_PREFIX = PROPS_FIELD + ".";
 	static final String PROPS_JSON = "_" + PROPS_FIELD;
 	static final String PROPS_REGEX = "(^|.*\\W)" + PROPS_FIELD + "[\\.\\:].+";
-	static final boolean USE_TRANSPORT_CLIENT = Config.getConfigBoolean("es.use_transportclient", false);
 
 	/**
 	 * Switches between normal indexing and indexing with nested key/value objects for Sysprop.properties.
@@ -180,30 +170,28 @@ public final class ElasticSearchUtils {
 	 */
 	static String getDefaultMapping() {
 		return "{\n" +
-			"  \"paraobject\": {\n" +
-			"    \"properties\": {\n" +
-			"      \"nstd\": {\"type\": \"nested\"},\n" +
-			"      \"properties\": {\"type\": \"" + (nestedMode() ? "nested" : "object") + "\"},\n" +
-			"      \"latlng\": {\"type\": \"geo_point\"},\n" +
-			"      \"_docid\": {\"type\": \"long\", \"index\": false},\n" +
-			"      \"updated\": {\"type\": \"date\", \"format\" : \"" + DATE_FORMAT + "\"},\n" +
-			"      \"timestamp\": {\"type\": \"date\", \"format\" : \"" + DATE_FORMAT + "\"},\n" +
+			"  \"properties\": {\n" +
+			"    \"nstd\": {\"type\": \"nested\"},\n" +
+			"    \"properties\": {\"type\": \"" + (nestedMode() ? "nested" : "object") + "\"},\n" +
+			"    \"latlng\": {\"type\": \"geo_point\"},\n" +
+			"    \"_docid\": {\"type\": \"long\", \"index\": false},\n" +
+			"    \"updated\": {\"type\": \"date\", \"format\" : \"" + DATE_FORMAT + "\"},\n" +
+			"    \"timestamp\": {\"type\": \"date\", \"format\" : \"" + DATE_FORMAT + "\"},\n" +
 
-			"      \"tag\": {\"type\": \"keyword\"},\n" +
-			"      \"id\": {\"type\": \"keyword\"},\n" +
-			"      \"key\": {\"type\": \"keyword\"},\n" +
-			"      \"name\": {\"type\": \"keyword\"},\n" +
-			"      \"type\": {\"type\": \"keyword\"},\n" +
-			"      \"tags\": {\"type\": \"keyword\"},\n" +
-			"      \"token\": {\"type\": \"keyword\"},\n" +
-			"      \"email\": {\"type\": \"keyword\"},\n" +
-			"      \"appid\": {\"type\": \"keyword\"},\n" +
-			"      \"groups\": {\"type\": \"keyword\"},\n" +
-			"      \"password\": {\"type\": \"keyword\"},\n" +
-			"      \"parentid\": {\"type\": \"keyword\"},\n" +
-			"      \"creatorid\": {\"type\": \"keyword\"},\n" +
-			"      \"identifier\": {\"type\": \"keyword\"}\n" +
-			"    }\n" +
+			"    \"tag\": {\"type\": \"keyword\"},\n" +
+			"    \"id\": {\"type\": \"keyword\"},\n" +
+			"    \"key\": {\"type\": \"keyword\"},\n" +
+			"    \"name\": {\"type\": \"keyword\"},\n" +
+			"    \"type\": {\"type\": \"keyword\"},\n" +
+			"    \"tags\": {\"type\": \"keyword\"},\n" +
+			"    \"token\": {\"type\": \"keyword\"},\n" +
+			"    \"email\": {\"type\": \"keyword\"},\n" +
+			"    \"appid\": {\"type\": \"keyword\"},\n" +
+			"    \"groups\": {\"type\": \"keyword\"},\n" +
+			"    \"password\": {\"type\": \"keyword\"},\n" +
+			"    \"parentid\": {\"type\": \"keyword\"},\n" +
+			"    \"creatorid\": {\"type\": \"keyword\"},\n" +
+			"    \"identifier\": {\"type\": \"keyword\"}\n" +
 			"  }\n" +
 			"}";
 	}
@@ -223,48 +211,7 @@ public final class ElasticSearchUtils {
 	private ElasticSearchUtils() { }
 
 	static void initClient() {
-		if (USE_TRANSPORT_CLIENT) {
-			getTransportClient();
-		} else {
-			getRESTClient();
-		}
-	}
-
-	/**
-	 * Creates an instance of the legacy transport client that talks to Elasticsearch.
-	 * @return a TransportClient instance
-	 */
-	public static Client getTransportClient() {
-		if (searchClient != null) {
-			return searchClient;
-		}
-		// https://www.elastic.co/guide/en/elasticsearch/client/java-api/current/client.html
-		logger.warn("Using Transport client, which is scheduled for deprecation in Elasticsearch 7.x.");
-		String esHost = Config.getConfigParam("es.transportclient_host", "localhost");
-		int esPort = Config.getConfigInt("es.transportclient_port", 9300);
-		Settings.Builder settings = Settings.builder();
-		settings.put("client.transport.sniff", true);
-		settings.put("cluster.name", Config.CLUSTER_NAME);
-		searchClient = new PreBuiltTransportClient(settings.build());
-		TransportAddress addr;
-		try {
-			addr = new TransportAddress(InetAddress.getByName(esHost), esPort);
-		} catch (UnknownHostException ex) {
-			addr = new TransportAddress(InetAddress.getLoopbackAddress(), esPort);
-			logger.warn("Unknown host: " + esHost, ex);
-		}
-		searchClient.addTransportAddress(addr);
-
-		Para.addDestroyListener(new DestroyListener() {
-			public void onDestroy() {
-				shutdownClient();
-			}
-		});
-
-		if (!existsIndex(Config.getRootAppIdentifier())) {
-			createIndex(Config.getRootAppIdentifier());
-		}
-		return searchClient;
+		getRESTClient();
 	}
 
 	/**
@@ -301,10 +248,6 @@ public final class ElasticSearchUtils {
 	 * Stops the client instance and releases resources.
 	 */
 	protected static void shutdownClient() {
-		if (searchClient != null) {
-			searchClient.close();
-			searchClient = null;
-		}
 		if (restClient != null) {
 			try {
 				restClient.close();
@@ -352,13 +295,9 @@ public final class ElasticSearchUtils {
 					"swedish", "turkish");
 
 			// create index with default system mappings; ES allows only one type per index
-			CreateIndexRequest create = new CreateIndexRequest(name, settings.build()).
-					mapping("paraobject", getDefaultMapping(), XContentType.JSON);
-			if (USE_TRANSPORT_CLIENT) {
-				getTransportClient().admin().indices().create(create).actionGet();
-			} else {
-				getRESTClient().indices().create(create, RequestOptions.DEFAULT);
-			}
+			CreateIndexRequest create = new CreateIndexRequest(name).settings(settings.build()).
+					mapping(getDefaultMapping(), XContentType.JSON);
+			getRESTClient().indices().create(create, RequestOptions.DEFAULT);
 			logger.info("Created a new index '{}' with {} shards, {} replicas.", name, shards, replicas);
 		} catch (Exception e) {
 			logger.warn(null, e);
@@ -414,11 +353,7 @@ public final class ElasticSearchUtils {
 			String indexName = getIndexNameWithWildcard(appid.trim());
 			logger.info("Deleted ES index '{}'.", indexName);
 			DeleteIndexRequest delete = new DeleteIndexRequest(indexName);
-			if (USE_TRANSPORT_CLIENT) {
-				getTransportClient().admin().indices().delete(delete).actionGet();
-			} else {
-				getRESTClient().indices().delete(delete, RequestOptions.DEFAULT);
-			}
+			getRESTClient().indices().delete(delete, RequestOptions.DEFAULT);
 		} catch (Exception e) {
 			logger.warn(null, e);
 			return false;
@@ -439,13 +374,8 @@ public final class ElasticSearchUtils {
 		boolean exists = true;
 		try {
 			String indexName = appid.trim();
-			if (USE_TRANSPORT_CLIENT) {
-				IndicesExistsRequest get = new IndicesExistsRequest(indexName);
-				exists = getTransportClient().admin().indices().exists(get).actionGet().isExists();
-			} else {
-				GetIndexRequest get = new GetIndexRequest().indices(indexName);
-				exists = getRESTClient().indices().exists(get, RequestOptions.DEFAULT);
-			}
+			GetIndexRequest get = new GetIndexRequest(indexName);
+			exists = getRESTClient().indices().exists(get, RequestOptions.DEFAULT);
 		} catch (Exception e) {
 			logger.warn(null, e);
 			exists = false;
@@ -506,7 +436,7 @@ public final class ElasticSearchUtils {
 				for (ParaObject obj : list) {
 					if (obj != null) {
 						// put objects from DB into the newly created index
-						batch.add(new IndexRequest(newName, getType(), obj.getId()).source(getSourceFromParaObject(obj)));
+						batch.add(new IndexRequest(newName).id(obj.getId()).source(getSourceFromParaObject(obj)));
 						// index in batches of ${queueSize} objects
 						if (batch.size() >= batchSize) {
 							reindexedCount += batch.size();
@@ -544,17 +474,10 @@ public final class ElasticSearchUtils {
 	 */
 	public static void refreshIndex(String appid) throws IOException {
 		if (!StringUtils.isBlank(appid)) {
-			if (USE_TRANSPORT_CLIENT) {
-				if (asyncEnabled()) {
-					bulkProcessor(getTransportClient()).flush();
-				}
-				getTransportClient().admin().indices().prepareRefresh(getIndexName(appid)).get();
-			} else {
-				if (asyncEnabled()) {
-					bulkProcessor(getRESTClient()).flush();
-				}
-				getRESTClient().indices().refresh(new RefreshRequest(getIndexName(appid)), RequestOptions.DEFAULT);
+			if (asyncEnabled()) {
+				bulkProcessor(getRESTClient()).flush();
 			}
+			getRESTClient().indices().refresh(new RefreshRequest(getIndexName(appid)), RequestOptions.DEFAULT);
 		}
 	}
 
@@ -635,11 +558,7 @@ public final class ElasticSearchUtils {
 				addAction = AliasActions.add().index(index).alias(alias);
 			}
 			IndicesAliasesRequest actions = new IndicesAliasesRequest().addAliasAction(addAction);
-			if (USE_TRANSPORT_CLIENT) {
-				return getTransportClient().admin().indices().aliases(actions).actionGet().isAcknowledged();
-			} else {
-				return getRESTClient().indices().updateAliases(actions, RequestOptions.DEFAULT).isAcknowledged();
-			}
+			return getRESTClient().indices().updateAliases(actions, RequestOptions.DEFAULT).isAcknowledged();
 		} catch (Exception e) {
 			logger.error(null, e);
 			return false;
@@ -661,11 +580,7 @@ public final class ElasticSearchUtils {
 			String index = getIndexNameWithWildcard(indexName.trim());
 			AliasActions removeAction = AliasActions.remove().index(index).alias(alias);
 			IndicesAliasesRequest actions = new IndicesAliasesRequest().addAliasAction(removeAction);
-			if (USE_TRANSPORT_CLIENT) {
-				return getTransportClient().admin().indices().aliases(actions).actionGet().isAcknowledged();
-			} else {
-				return getRESTClient().indices().updateAliases(actions, RequestOptions.DEFAULT).isAcknowledged();
-			}
+			return getRESTClient().indices().updateAliases(actions, RequestOptions.DEFAULT).isAcknowledged();
 		} catch (Exception e) {
 			logger.error(null, e);
 			return false;
@@ -686,11 +601,7 @@ public final class ElasticSearchUtils {
 			String alias = aliasName.trim();
 			String index = getIndexNameWithWildcard(indexName.trim());
 			GetAliasesRequest getAlias = new GetAliasesRequest().indices(index).aliases(alias);
-			if (USE_TRANSPORT_CLIENT) {
-				return getTransportClient().admin().indices().aliasesExist(getAlias).actionGet().exists();
-			} else {
-				return getRESTClient().indices().existsAlias(getAlias, RequestOptions.DEFAULT);
-			}
+			return getRESTClient().indices().existsAlias(getAlias, RequestOptions.DEFAULT);
 		} catch (Exception e) {
 			logger.error(null, e);
 			return false;
@@ -717,11 +628,7 @@ public final class ElasticSearchUtils {
 			AliasActions addAction = AliasActions.add().index(newName).alias(aliaz);
 			IndicesAliasesRequest actions = new IndicesAliasesRequest().
 					addAliasAction(removeAction).addAliasAction(addAction);
-			if (USE_TRANSPORT_CLIENT) {
-				getTransportClient().admin().indices().aliases(actions).actionGet();
-			} else {
-				getRESTClient().indices().updateAliases(actions, RequestOptions.DEFAULT);
-			}
+			getRESTClient().indices().updateAliases(actions, RequestOptions.DEFAULT);
 			// delete the old index
 			if (deleteOld) {
 				deleteIndex(oldName);
@@ -741,22 +648,14 @@ public final class ElasticSearchUtils {
 			return appid;
 		}
 		try {
-			if (USE_TRANSPORT_CLIENT) {
-				GetIndexResponse result = getTransportClient().admin().indices().prepareGetIndex().
-						setIndices(appid).execute().actionGet();
-				if (result.indices() != null && result.indices().length > 0) {
-					return result.indices()[0];
-				}
-			} else {
-				String path = "/" + appid;
-				org.elasticsearch.client.Request request = new org.elasticsearch.client.Request("GET", path);
-				Response resp = getRESTClient().getLowLevelClient().performRequest(request);
-				HttpEntity entity = resp.getEntity();
-				if (entity != null && entity.getContent() != null) {
-					JsonNode tree = ParaObjectUtils.getJsonMapper().readTree(entity.getContent());
-					if (!tree.isMissingNode() && tree.isObject()) {
-						return tree.fieldNames().next();
-					}
+			String path = "/" + appid;
+			org.elasticsearch.client.Request request = new org.elasticsearch.client.Request("GET", path);
+			Response resp = getRESTClient().getLowLevelClient().performRequest(request);
+			HttpEntity entity = resp.getEntity();
+			if (entity != null && entity.getContent() != null) {
+				JsonNode tree = ParaObjectUtils.getJsonMapper().readTree(entity.getContent());
+				if (!tree.isMissingNode() && tree.isObject()) {
+					return tree.fieldNames().next();
 				}
 			}
 		} catch (Exception e) {
@@ -786,30 +685,16 @@ public final class ElasticSearchUtils {
 		}
 		ActionListener<BulkResponse> listener = getSyncRequestListener();
 		try {
-			if (USE_TRANSPORT_CLIENT) {
-				if (asyncEnabled()) {
-					BulkProcessor bp = bulkProcessor(getTransportClient());
-					requests.forEach(bp::add);
-					if (flushImmediately()) {
-						bp.flush();
-					}
-				} else {
-					BulkRequest bulk = new BulkRequest();
-					requests.forEach(bulk::add);
-					listener.onResponse(getTransportClient().bulk(bulk).actionGet());
+			if (asyncEnabled()) {
+				BulkProcessor bp = bulkProcessor(getRESTClient());
+				requests.forEach(bp::add);
+				if (flushImmediately()) {
+					bp.flush();
 				}
 			} else {
-				if (asyncEnabled()) {
-					BulkProcessor bp = bulkProcessor(getRESTClient());
-					requests.forEach(bp::add);
-					if (flushImmediately()) {
-						bp.flush();
-					}
-				} else {
-					BulkRequest bulk = new BulkRequest();
-					requests.forEach(bulk::add);
-					listener.onResponse(getRESTClient().bulk(bulk, RequestOptions.DEFAULT));
-				}
+				BulkRequest bulk = new BulkRequest();
+				requests.forEach(bulk::add);
+				listener.onResponse(getRESTClient().bulk(bulk, RequestOptions.DEFAULT));
 			}
 		} catch (Exception e) {
 			listener.onFailure(e);
@@ -820,13 +705,6 @@ public final class ElasticSearchUtils {
 		if (bulkProcessor == null) {
 			bulkProcessor = configureBulkProcessor(BulkProcessor.builder((request, bulkListener) ->
 					client.bulkAsync(request, RequestOptions.DEFAULT, bulkListener), getAsyncRequestListener()));
-		}
-		return bulkProcessor;
-	}
-
-	private static BulkProcessor bulkProcessor(Client client) {
-		if (bulkProcessor == null) {
-			bulkProcessor = configureBulkProcessor(BulkProcessor.builder(client, getAsyncRequestListener()));
 		}
 		return bulkProcessor;
 	}
@@ -916,19 +794,14 @@ public final class ElasticSearchUtils {
 	 */
 	public static boolean isClusterOK() {
 		try {
-			if (USE_TRANSPORT_CLIENT) {
-				return !getTransportClient().admin().cluster().prepareClusterStats().execute().actionGet().
-						getStatus().equals(ClusterHealthStatus.RED);
-			} else {
-				String path = "/_cluster/health";
-				org.elasticsearch.client.Request request = new org.elasticsearch.client.Request("GET", path);
-				Response resp = getRESTClient().getLowLevelClient().performRequest(request);
-				HttpEntity entity = resp.getEntity();
-				if (entity != null && entity.getContent() != null) {
-					JsonNode health = ParaObjectUtils.getJsonMapper().readTree(entity.getContent());
-					if (!health.isMissingNode() && health.isObject()) {
-						return !ClusterHealthStatus.RED.toString().equalsIgnoreCase(health.get("status").asText());
-					}
+			String path = "/_cluster/health";
+			org.elasticsearch.client.Request request = new org.elasticsearch.client.Request("GET", path);
+			Response resp = getRESTClient().getLowLevelClient().performRequest(request);
+			HttpEntity entity = resp.getEntity();
+			if (entity != null && entity.getContent() != null) {
+				JsonNode health = ParaObjectUtils.getJsonMapper().readTree(entity.getContent());
+				if (!health.isMissingNode() && health.isObject()) {
+					return !ClusterHealthStatus.RED.toString().equalsIgnoreCase(health.get("status").asText());
 				}
 			}
 		} catch (Exception e) {
@@ -1420,14 +1293,6 @@ public final class ElasticSearchUtils {
 	 */
 	static String getIndexName(String appid) {
 		return appid.trim();
-	}
-
-	/**
-	 * Para indices have 1 type only - "paraobject". From v6 onwards, ES allows only 1 type per index.
-	 * @return "paraobject"
-	 */
-	static String getType() {
-		return ParaObject.class.getSimpleName().toLowerCase();
 	}
 
 	/**
