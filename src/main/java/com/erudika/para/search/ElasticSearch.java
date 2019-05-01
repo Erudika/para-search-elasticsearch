@@ -534,7 +534,7 @@ public class ElasticSearch implements Search {
 		try {
 			SearchRequest search = new SearchRequest(getIndexName(appid)).
 					searchType(SearchType.DFS_QUERY_THEN_FETCH).
-					source(SearchSourceBuilder.searchSource().query(query).size(max));
+					source(ElasticSearchUtils.getSourceBuilder(query, max));
 
 			if (pageNum <= 1 && !StringUtils.isBlank(page.getLastKey())) {
 				search.source().searchAfter(new Object[]{NumberUtils.toLong(page.getLastKey())});

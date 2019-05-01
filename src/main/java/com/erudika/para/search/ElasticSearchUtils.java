@@ -113,6 +113,7 @@ import static org.elasticsearch.index.query.QueryBuilders.rangeQuery;
 import static org.elasticsearch.index.query.QueryBuilders.termQuery;
 import static org.elasticsearch.index.query.QueryBuilders.wildcardQuery;
 import org.elasticsearch.index.query.RangeQueryBuilder;
+import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.elasticsearch.search.sort.SortBuilder;
 import org.elasticsearch.search.sort.SortBuilders;
 import org.elasticsearch.search.sort.SortOrder;
@@ -939,6 +940,23 @@ public final class ElasticSearchUtils {
 		}
 		// special DOC ID field used in "search after"
 		source.put("_docid", NumberUtils.toLong(Utils.getNewId()));
+		return source;
+	}
+
+	/**
+	 * Helper method which creates a new instance of the source builder object.
+	 * @param query a query
+	 * @param max max hits
+	 * @return source builder instance
+	 */
+	static SearchSourceBuilder getSourceBuilder(QueryBuilder query, int max) {
+		String trackTotalHits = Config.getConfigParam("es.track_total_hits", "");
+		SearchSourceBuilder source = new SearchSourceBuilder().query(query).size(max);
+		if (NumberUtils.isDigits(trackTotalHits)) {
+			source.trackTotalHitsUpTo(NumberUtils.toInt(trackTotalHits, Config.DEFAULT_LIMIT));
+		} else if (Boolean.valueOf(trackTotalHits)) {
+			source.trackTotalHits(true);
+		}
 		return source;
 	}
 
