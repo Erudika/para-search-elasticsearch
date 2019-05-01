@@ -17,8 +17,7 @@ This plugin allows you to use Elasticsearch as the search engine for Para.
 
 ## Features
 
-- Implements `Search` interface and supports both transport and high level clients
-- Implements `DAO` interface so you can use Elasticsearch as a database (avoid in production!)
+- Implements the Para `Search` interface using the high level REST client (HLRC)
 - Index sharing and multitenancy support through alias routing and filtering
 - Supports both asynchronous and synchronous document operations
 - Full pagination support for both "search-after" and "from-size" modes
@@ -66,6 +65,7 @@ para.es.restclient_port = 9200
 para.es.sign_requests_to_aws = false
 para.es.aws_region = "eu-west-1"
 para.es.fail_on_indexing_errors = false
+para.es.track_total_hits = 10000
 
 # asynchronous settings
 para.es.async_enabled = false
@@ -112,11 +112,12 @@ synchronous indexing, the burden falls on the client application to try the inde
 BulkProcessor, however, offers a useful feature to automatically retry indexing requests with exponential
 backoff between retries. If the index request fails with a `EsRejectedExecutionException`, the request
 will be retried up to `para.es.bulk.max_num_retries` times. Even if your use case demands a high degree
-of confidence with respect to data consistency between your DAO and Search, it's still recommended to use
-asynchronous indexing with retries enabled. If you'd prefer to use asynchronous indexing but have the BulkProcessor
-flushed upon every invocation of index/unindex/indexAll/unindexAll, simply enabled `para.es.bulk.flush_immediately`.
-When this option is enabled, the BulkProcessor's flush method will be called immediately after adding the documents
-in the request. This option is also useful for writing unit tests where you want ensure the documents flush promptly.
+of confidence with respect to data consistency between your database (`DAO`) and index (`Search`), it's still 
+recommended to use asynchronous indexing with retries enabled. If you'd prefer to use asynchronous indexing but have 
+the BulkProcessor flushed upon every invocation of index/unindex/indexAll/unindexAll, simply enabled 
+`para.es.bulk.flush_immediately`. When this option is enabled, the BulkProcessor's flush method will be called 
+immediately after adding the documents in the request. This option is also useful for writing unit tests where you 
+want ensure the documents flush promptly.
 
 ### Indexing modes
 
@@ -239,6 +240,11 @@ by default. When the root index is created with sharing enabled, a special alias
 routing field which sends all documents of a child app to a particular shard, while providing total isolation between
 apps. This is useful when there are lots of smaller apps with just a few hundred documents each and we want to avoid the
 overhead of one index per app.
+
+### Deprecation notice
+
+- Support for the ES Transport client has been removed because it is now deprecated and removed in ES 7.0. 
+- The previously bundled `IndexBasedDAO` has been removed because it had lots of issues.
 
 ### Requirements
 
