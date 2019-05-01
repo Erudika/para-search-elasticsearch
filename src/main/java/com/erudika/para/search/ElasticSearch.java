@@ -91,6 +91,7 @@ import org.slf4j.LoggerFactory;
 import static com.erudika.para.search.ElasticSearchUtils.executeRequests;
 import org.elasticsearch.action.DocWriteRequest;
 import org.elasticsearch.client.RequestOptions;
+import org.elasticsearch.client.core.CountRequest;
 
 /**
  * An implementation of the {@link Search} interface using ElasticSearch.
@@ -605,9 +606,9 @@ public class ElasticSearch implements Search {
 		}
 		Long count = 0L;
 		try {
-			SearchRequest search = new SearchRequest(getIndexName(appid)).
-					source(SearchSourceBuilder.searchSource().size(0).query(query).trackTotalHits(true));
-			count = getRESTClient().search(search, RequestOptions.DEFAULT).getHits().getTotalHits().value;
+			CountRequest cr = new CountRequest(getIndexName(appid)).
+					source(SearchSourceBuilder.searchSource().query(query));
+			count = getRESTClient().count(cr, RequestOptions.DEFAULT).getCount();
 		} catch (Exception e) {
 			Throwable cause = e.getCause();
 			String msg = cause != null ? cause.getMessage() : e.getMessage();
@@ -627,9 +628,9 @@ public class ElasticSearch implements Search {
 				query = boolQuery().must(query).must(termQuery(Config._TYPE, type));
 			}
 			try {
-				SearchRequest search = new SearchRequest(getIndexName(appid)).
-					source(SearchSourceBuilder.searchSource().size(0).query(query).trackTotalHits(true));
-				count = getRESTClient().search(search, RequestOptions.DEFAULT).getHits().getTotalHits().value;
+				CountRequest cr = new CountRequest(getIndexName(appid)).
+					source(SearchSourceBuilder.searchSource().query(query));
+				count = getRESTClient().count(cr, RequestOptions.DEFAULT).getCount();
 			} catch (Exception e) {
 				Throwable cause = e.getCause();
 				String msg = cause != null ? cause.getMessage() : e.getMessage();
