@@ -606,7 +606,7 @@ public class ElasticSearch implements Search {
 		Long count = 0L;
 		try {
 			SearchRequest search = new SearchRequest(getIndexName(appid)).
-					source(SearchSourceBuilder.searchSource().size(0).query(query));
+					source(SearchSourceBuilder.searchSource().size(0).query(query).trackTotalHits(true));
 			count = getRESTClient().search(search, RequestOptions.DEFAULT).getHits().getTotalHits().value;
 		} catch (Exception e) {
 			Throwable cause = e.getCause();
@@ -628,7 +628,7 @@ public class ElasticSearch implements Search {
 			}
 			try {
 				SearchRequest search = new SearchRequest(getIndexName(appid)).
-					source(SearchSourceBuilder.searchSource().size(0).query(query));
+					source(SearchSourceBuilder.searchSource().size(0).query(query).trackTotalHits(true));
 				count = getRESTClient().search(search, RequestOptions.DEFAULT).getHits().getTotalHits().value;
 			} catch (Exception e) {
 				Throwable cause = e.getCause();
