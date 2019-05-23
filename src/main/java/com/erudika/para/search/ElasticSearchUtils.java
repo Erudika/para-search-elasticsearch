@@ -34,7 +34,6 @@ import com.erudika.para.persistence.DAO;
 import com.erudika.para.utils.Config;
 import com.erudika.para.utils.Pager;
 import com.erudika.para.utils.Utils;
-import com.fasterxml.jackson.databind.JsonNode;
 import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
@@ -46,6 +45,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -75,6 +75,7 @@ import org.apache.lucene.search.WildcardQuery;
 import static org.apache.lucene.search.join.ScoreMode.Avg;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.DocWriteRequest;
+import org.elasticsearch.action.admin.cluster.health.ClusterHealthRequest;
 import org.elasticsearch.action.admin.indices.alias.IndicesAliasesRequest;
 import org.elasticsearch.action.admin.indices.alias.IndicesAliasesRequest.AliasActions;
 import org.elasticsearch.action.admin.indices.alias.get.GetAliasesRequest;
@@ -87,13 +88,13 @@ import org.elasticsearch.action.bulk.BulkRequest;
 import org.elasticsearch.action.bulk.BulkResponse;
 import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.client.RequestOptions;
-import org.elasticsearch.client.Response;
 import org.elasticsearch.client.RestClient;
 import org.elasticsearch.client.RestClientBuilder;
 import org.elasticsearch.client.RestHighLevelClient;
 import org.elasticsearch.client.indices.CreateIndexRequest;
 import org.elasticsearch.client.indices.GetIndexRequest;
 import org.elasticsearch.cluster.health.ClusterHealthStatus;
+import org.elasticsearch.cluster.metadata.AliasMetaData;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.unit.ByteSizeUnit;
 import org.elasticsearch.common.unit.ByteSizeValue;
@@ -650,15 +651,10 @@ public final class ElasticSearchUtils {
 			return appid;
 		}
 		try {
-			String path = "/" + appid;
-			org.elasticsearch.client.Request request = new org.elasticsearch.client.Request("GET", path);
-			Response resp = getRESTClient().getLowLevelClient().performRequest(request);
-			HttpEntity entity = resp.getEntity();
-			if (entity != null && entity.getContent() != null) {
-				JsonNode tree = ParaObjectUtils.getJsonMapper().readTree(entity.getContent());
-				if (!tree.isMissingNode() && tree.isObject()) {
-					return tree.fieldNames().next();
-				}
+			Map<String, Set<AliasMetaData>> aliases = getRESTClient().indices().
+					getAlias(new GetAliasesRequest().indices(appid), RequestOptions.DEFAULT).getAliases();
+			if (!aliases.isEmpty()) {
+				return aliases.keySet().iterator().next();
 			}
 		} catch (Exception e) {
 			logger.error(null, e);
@@ -796,16 +792,9 @@ public final class ElasticSearchUtils {
 	 */
 	public static boolean isClusterOK() {
 		try {
-			String path = "/_cluster/health";
-			org.elasticsearch.client.Request request = new org.elasticsearch.client.Request("GET", path);
-			Response resp = getRESTClient().getLowLevelClient().performRequest(request);
-			HttpEntity entity = resp.getEntity();
-			if (entity != null && entity.getContent() != null) {
-				JsonNode health = ParaObjectUtils.getJsonMapper().readTree(entity.getContent());
-				if (!health.isMissingNode() && health.isObject()) {
-					return !ClusterHealthStatus.RED.toString().equalsIgnoreCase(health.get("status").asText());
-				}
-			}
+			ClusterHealthStatus status = getRESTClient().cluster().
+					health(new ClusterHealthRequest(), RequestOptions.DEFAULT).getStatus();
+			return !ClusterHealthStatus.RED.equals(status);
 		} catch (Exception e) {
 			logger.error(null, e);
 		}
