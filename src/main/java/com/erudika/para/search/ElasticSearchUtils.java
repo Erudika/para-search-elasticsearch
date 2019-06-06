@@ -824,8 +824,8 @@ public final class ElasticSearchUtils {
 				if (matcher.matches()) {
 					bfb = range(matcher.group(1), term.getKey(), stringValue);
 				} else {
-					if (nestedMode() && term.getKey().startsWith(PROPS_PREFIX)) {
-						bfb = nestedPropsQuery(keyValueBoolQuery(term.getKey(), stringValue));
+					if (nestedMode()) {
+						bfb = term(new TermQuery(new Term(term.getKey(), stringValue)));
 					} else {
 						bfb = termQuery(term.getKey(), stringValue);
 					}
@@ -1059,7 +1059,7 @@ public final class ElasticSearchUtils {
 			rfb.lte(getNumericValue(stringValue));
 		}
 		if (nestedMode) {
-			return nestedPropsQuery(keyValueBoolQuery(key, stringValue, rfb));
+			return nestedPropsQuery(keyValueBoolQuery(key, rfb));
 		} else {
 			return rfb;
 		}
@@ -1136,8 +1136,8 @@ public final class ElasticSearchUtils {
 		if (!StringUtils.isBlank(trq.getField())) {
 			String from = trq.getLowerTerm() != null ? Term.toString(trq.getLowerTerm()) : "*";
 			String to = trq.getUpperTerm() != null ? Term.toString(trq.getUpperTerm()) : "*";
-			boolean nestedMode = nestedMode() && trq.getField().matches(PROPS_REGEX);
-			qb = rangeQuery(nestedMode ? getValueFieldNameFromRange(from, to) : trq.getField());
+			boolean isNestedField = trq.getField().matches(PROPS_REGEX);
+			qb = rangeQuery(isNestedField ? getValueFieldNameFromRange(from, to) : trq.getField());
 			if ("*".equals(from) && "*".equals(to)) {
 				qb = matchAllQuery();
 			}
@@ -1147,7 +1147,7 @@ public final class ElasticSearchUtils {
 			if (!"*".equals(to)) {
 				((RangeQueryBuilder) qb).to(getNumericValue(to)).includeUpper(trq.includesUpper());
 			}
-			if (nestedMode) {
+			if (isNestedField) {
 				qb = nestedPropsQuery(keyValueBoolQuery(trq.getField(), qb));
 			}
 		}
@@ -1159,8 +1159,11 @@ public final class ElasticSearchUtils {
 		String field = ((TermQuery) q).getTerm().field();
 		String value = ((TermQuery) q).getTerm().text();
 		if (StringUtils.isBlank(field)) {
-			qb = multiMatchQuery(value);
-		} else if (nestedMode() && field.matches(PROPS_REGEX)) {
+			QueryBuilder kQuery = matchAllQuery();
+			QueryBuilder vQuery = multiMatchQuery(value);
+			qb = boolQuery().should(nestedPropsQuery(boolQuery().must(kQuery).must(vQuery))).
+					should(multiMatchQuery(value));
+		} else if (field.matches(PROPS_REGEX)) {
 			qb = nestedPropsQuery(keyValueBoolQuery(field, value));
 		} else {
 			qb = termQuery(field, value);
@@ -1173,8 +1176,11 @@ public final class ElasticSearchUtils {
 		String field = ((FuzzyQuery) q).getTerm().field();
 		String value = ((FuzzyQuery) q).getTerm().text();
 		if (StringUtils.isBlank(field)) {
-			qb = multiMatchQuery(value);
-		} else if (nestedMode() && field.matches(PROPS_REGEX)) {
+			QueryBuilder kQuery = matchAllQuery();
+			QueryBuilder vQuery = fuzzyQuery(getValueFieldName(value), value);
+			qb = boolQuery().should(nestedPropsQuery(boolQuery().must(kQuery).must(vQuery))).
+					should(multiMatchQuery(value));
+		} else if (field.matches(PROPS_REGEX)) {
 			qb = nestedPropsQuery(keyValueBoolQuery(field, fuzzyQuery(getValueFieldName(value), value)));
 		} else {
 			qb = fuzzyQuery(field, value);
@@ -1187,8 +1193,11 @@ public final class ElasticSearchUtils {
 		String field = ((PrefixQuery) q).getPrefix().field();
 		String value = ((PrefixQuery) q).getPrefix().text();
 		if (StringUtils.isBlank(field)) {
-			qb = multiMatchQuery(value);
-		} else if (nestedMode() && field.matches(PROPS_REGEX)) {
+			QueryBuilder kQuery = matchAllQuery();
+			QueryBuilder vQuery = prefixQuery(getValueFieldName(value), value);
+			qb = boolQuery().should(nestedPropsQuery(boolQuery().must(kQuery).must(vQuery))).
+					should(multiMatchQuery(value));
+		} else if (field.matches(PROPS_REGEX)) {
 			qb = nestedPropsQuery(keyValueBoolQuery(field, prefixQuery(getValueFieldName(value), value)));
 		} else {
 			qb = prefixQuery(field, value);
@@ -1201,8 +1210,11 @@ public final class ElasticSearchUtils {
 		String field = ((WildcardQuery) q).getTerm().field();
 		String value = ((WildcardQuery) q).getTerm().text();
 		if (StringUtils.isBlank(field)) {
-			qb = multiMatchQuery(value);
-		} else if (nestedMode() && field.matches(PROPS_REGEX)) {
+			QueryBuilder kQuery = matchAllQuery();
+			QueryBuilder vQuery = wildcardQuery(getValueFieldName(value), value);
+			qb = boolQuery().should(nestedPropsQuery(boolQuery().must(kQuery).must(vQuery))).
+					should(multiMatchQuery(value));
+		} else if (field.matches(PROPS_REGEX)) {
 			qb = nestedPropsQuery(keyValueBoolQuery(field, wildcardQuery(getValueFieldName(value), value)));
 		} else {
 			qb = wildcardQuery(field, value);

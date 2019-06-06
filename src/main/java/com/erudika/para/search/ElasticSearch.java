@@ -24,7 +24,6 @@ import com.erudika.para.core.Tag;
 import com.erudika.para.core.utils.CoreUtils;
 import com.erudika.para.persistence.DAO;
 import static com.erudika.para.search.ElasticSearchUtils.PROPS_PREFIX;
-import static com.erudika.para.search.ElasticSearchUtils.PROPS_REGEX;
 import static com.erudika.para.search.ElasticSearchUtils.convertQueryStringToNestedQuery;
 import static com.erudika.para.search.ElasticSearchUtils.getIndexName;
 import static com.erudika.para.search.ElasticSearchUtils.getNestedKey;
@@ -300,7 +299,7 @@ public class ElasticSearch implements Search {
 		// a basic implementation of support for nested queries in query string
 		// https://github.com/elastic/elasticsearch/issues/11322
 		QueryBuilder qb;
-		if (nestedMode() && query.matches(PROPS_REGEX)) {
+		if (nestedMode()) {
 			qb = convertQueryStringToNestedQuery(query);
 			if (qb == null) {
 				return Collections.emptyList();

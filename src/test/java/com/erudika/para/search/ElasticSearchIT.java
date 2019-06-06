@@ -194,6 +194,7 @@ public class ElasticSearchIT extends SearchTest {
 		c1.setTimestamp(12345678L);
 		c2.setTimestamp(123456789L);
 		c3.setTimestamp(1234567890L);
+		c3.setTags(Arrays.asList("kitty", "pet"));
 
 		Map<String, Object> owner1 = new HashMap<>();
 		Map<String, Object> owner2 = new HashMap<>();
@@ -248,6 +249,9 @@ public class ElasticSearchIT extends SearchTest {
 		List<ParaObject> r35 = s.findQuery(indexInNestedMode, "cat", "properties.owner.age:[* TO *]");
 		List<ParaObject> r36 = s.findQuery(indexInNestedMode, "cat", "properties.owner.nestedArray[1].sk:two2");
 		assertTrue(s.findQuery(indexInNestedMode, "cat", "dog AND properties.owner.age:34").isEmpty());
+		assertEquals(1, s.findQuery(indexInNestedMode, "cat", "pet AND properties.owner.age:35").size());
+		assertEquals(1, s.findQuery(indexInNestedMode, "cat", "pet").size());
+		assertEquals(2, s.findQuery(indexInNestedMode, "cat", "pet OR Bob").size());
 		assertEquals(3, s.findQuery(indexInNestedMode, "cat", "*").size());
 		assertEquals(1, s.findQuery(indexInNestedMode, "cat", "dog OR properties.owner.age:34").size());
 		assertEquals(3, s.findQuery(indexInNestedMode, "cat", "properties.owner.name:[alice TO chris]").size());
@@ -307,6 +311,11 @@ public class ElasticSearchIT extends SearchTest {
 		assertFalse(res.isEmpty());
 		assertEquals(c2, res.get(0));
 
+		// findQuery - without properties prefix, should search across all fields, nested or otherwise
+		assertEquals(1, s.findQuery(indexInNestedMode, "cat", "different").size());
+		assertEquals(1, s.findQuery(indexInNestedMode, "cat", "totally").size());
+		assertEquals(0, s.findQuery(indexInNestedMode, "cat", "totally AND properties.text:(testing*)").size());
+		assertEquals(3, s.findQuery(indexInNestedMode, "cat", "pet OR sentence").size());
 
 		s.unindexAll(indexInNestedMode, Arrays.asList(c1, c2, c3));
 		ElasticSearchUtils.deleteIndex(indexInNestedMode);
