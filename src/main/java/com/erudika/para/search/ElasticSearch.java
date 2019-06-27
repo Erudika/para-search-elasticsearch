@@ -373,7 +373,7 @@ public class ElasticSearch implements Search {
 		QueryBuilder qb;
 
 		if (fields == null || fields.length == 0) {
-			qb = moreLikeThisQuery(new String[]{liketext}).minDocFreq(1).minTermFreq(1);
+			qb = moreLikeThisQuery(new String[]{liketext}).minDocFreq(1).minTermFreq(1).minimumShouldMatch("40%");
 		} else {
 			boolean containsNestedProps = Arrays.stream(fields).anyMatch((f) -> StringUtils.startsWith(f, PROPS_PREFIX));
 			if (nestedMode() && containsNestedProps) {
@@ -381,13 +381,14 @@ public class ElasticSearch implements Search {
 				for (String field : fields) {
 					QueryBuilder kQuery = matchQuery(PROPS_PREFIX + "k", getNestedKey(field));
 					QueryBuilder vQuery = moreLikeThisQuery(new String[]{PROPS_PREFIX + "v"},
-							new String[]{liketext}, Item.EMPTY_ARRAY).minDocFreq(1).minTermFreq(1);
+							new String[]{liketext}, Item.EMPTY_ARRAY).minDocFreq(1).minTermFreq(1).
+							minimumShouldMatch("40%");
 					bqb.should(nestedPropsQuery(boolQuery().must(kQuery).must(vQuery)));
 				}
 				qb = bqb;
 			} else {
 				qb = moreLikeThisQuery(fields, new String[]{liketext}, Item.EMPTY_ARRAY).
-						minDocFreq(1).minTermFreq(1);
+						minDocFreq(1).minTermFreq(1).minimumShouldMatch("40%");
 			}
 		}
 

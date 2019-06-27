@@ -17,13 +17,6 @@
  */
 package com.erudika.para.search;
 
-import com.amazonaws.AmazonWebServiceRequest;
-import com.amazonaws.DefaultRequest;
-import com.amazonaws.Request;
-import com.amazonaws.auth.AWS4Signer;
-import com.amazonaws.auth.AWSCredentials;
-import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
-import com.amazonaws.http.HttpMethodName;
 import com.erudika.para.DestroyListener;
 import com.erudika.para.Para;
 import com.erudika.para.core.App;
@@ -35,7 +28,7 @@ import com.erudika.para.utils.Config;
 import com.erudika.para.utils.Pager;
 import com.erudika.para.utils.Utils;
 import java.io.IOException;
-import java.net.URI;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -120,6 +113,11 @@ import org.elasticsearch.search.sort.SortBuilders;
 import org.elasticsearch.search.sort.SortOrder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import software.amazon.awssdk.auth.signer.Aws4Signer;
+import software.amazon.awssdk.auth.signer.params.Aws4SignerParams;
+import software.amazon.awssdk.http.SdkHttpFullRequest;
+import software.amazon.awssdk.http.SdkHttpMethod;
+import software.amazon.awssdk.regions.Region;
 
 /**
  * Helper utilities for connecting to an Elasticsearch cluster.
@@ -1331,53 +1329,61 @@ public final class ElasticSearchUtils {
 	static RestClientBuilder.HttpClientConfigCallback getAWSRequestSigningInterceptor(String endpoint) {
 		return (HttpAsyncClientBuilder httpClientBuilder) -> {
 			httpClientBuilder.addInterceptorLast((HttpRequest request, HttpContext context) -> {
-				AWS4Signer signer = new AWS4Signer();
-				signer.setServiceName("es");
-				signer.setRegionName(Config.getConfigParam("es.aws_region", Config.AWS_REGION));
-				AWSCredentials credentials = DefaultAWSCredentialsProviderChain.getInstance().getCredentials();
+				Aws4Signer signer = Aws4Signer.create();
+				Aws4SignerParams.Builder<?> signerParams = Aws4SignerParams.builder().
+						doubleUrlEncode(false).
+						signingName("es").
+						signingRegion(Region.of(Config.getConfigParam("es.aws_region", "eu-west-1")));
 				URIBuilder uriBuilder;
 				String httpMethod = request.getRequestLine().getMethod();
 				String resourcePath;
-				Map<String, String> headers = new HashMap<>(request.getAllHeaders().length + 1);
 				Map<String, String> params = new HashMap<>();
 
 				try {
-					Request<AmazonWebServiceRequest> r = new DefaultRequest<>(signer.getServiceName());
+					SdkHttpFullRequest.Builder r = SdkHttpFullRequest.builder();
 					if (!StringUtils.isBlank(httpMethod)) {
-						r.setHttpMethod(HttpMethodName.valueOf(httpMethod));
+						r.method(SdkHttpMethod.valueOf(httpMethod));
 					}
 
-					r.setEndpoint(URI.create(endpoint));
+					if (!StringUtils.isBlank(endpoint)) {
+						if (endpoint.startsWith("https://")) {
+							r.protocol("HTTPS");
+							r.host(StringUtils.removeStart(endpoint, "https://"));
+						} else if (endpoint.startsWith("http://")) {
+							r.protocol("HTTP");
+							r.host(StringUtils.removeStart(endpoint, "http://"));
+						}
+					}
 
 					uriBuilder = new URIBuilder(request.getRequestLine().getUri());
 					resourcePath = uriBuilder.getPath();
 					if (!StringUtils.isBlank(resourcePath)) {
-						r.setResourcePath(resourcePath);
+						r.encodedPath(resourcePath);
 					}
 
 					for (NameValuePair param : uriBuilder.getQueryParams()) {
-						r.addParameter(param.getName(), param.getValue());
+						r.appendRawQueryParameter(param.getName(), param.getValue());
 					}
 
 					if (request instanceof HttpEntityEnclosingRequest) {
 						HttpEntity body = ((HttpEntityEnclosingRequest) request).getEntity();
 						if (body != null) {
-							r.setContent(body.getContent());
+							InputStream is = body.getContent();
+							r.contentStreamProvider(() -> is);
 						}
 					}
-					if (r.getContent() == null) {
+					if (r.contentStreamProvider() == null) {
 						request.removeHeaders("Content-Length");
 					}
 
 					for (Header header : request.getAllHeaders()) {
-						headers.put(header.getName(), header.getValue());
+						r.putHeader(header.getName(), header.getValue());
 					}
-					r.setHeaders(headers);
 
-					signer.sign(r, credentials);
+					signer.sign(r.build(), signerParams.build());
 
-					for (Entry<String, String> header : r.getHeaders().entrySet()) {
-						request.setHeader(header.getKey(), header.getValue());
+					for (String header : r.headers().keySet()) {
+						request.setHeader(header, r.firstMatchingHeader(header).orElse(""));
 					}
 				} catch (Exception ex) {
 					logger.error("Failed to sign request to AWS Elasticsearch:", ex);

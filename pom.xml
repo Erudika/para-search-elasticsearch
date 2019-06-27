@@ -55,7 +55,7 @@
 		<skipTests>false</skipTests>
 		<skipITs>${skipTests}</skipITs>
 		<skipUTs>${skipTests}</skipUTs>
-		<elasticsearch.version>7.1.1</elasticsearch.version>
+		<elasticsearch.version>7.2.0</elasticsearch.version>
 		<jerseyVer>2.28</jerseyVer>
 	</properties>
 
@@ -63,7 +63,7 @@
 		<dependency>
 			<groupId>com.erudika</groupId>
 			<artifactId>para-core</artifactId>
-			<version>1.31.3</version>
+			<version>1.32.0</version>
 			<scope>provided</scope>
 		</dependency>
 		<dependency>
@@ -81,19 +81,9 @@
 		<!-- ELASTICSEARCH CLIENTS -->
 		<dependency>
 			<groupId>org.elasticsearch.client</groupId>
-			<artifactId>transport</artifactId>
-			<version>${elasticsearch.version}</version>
-		</dependency>
-		<dependency>
-			<groupId>org.elasticsearch.client</groupId>
 			<artifactId>elasticsearch-rest-high-level-client</artifactId>
 			<version>${elasticsearch.version}</version>
 		</dependency>
-<!--		<dependency>
-			<groupId>org.elasticsearch</groupId>
-			<artifactId>elasticsearch-secure-sm</artifactId>
-			<version>7.0.0-alpha1-SNAPSHOT</version>
-		</dependency>-->
 
 		<dependency>
 			<groupId>org.apache.logging.log4j</groupId>
