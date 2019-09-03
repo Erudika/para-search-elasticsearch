@@ -50,7 +50,11 @@ import org.apache.http.HttpEntityEnclosingRequest;
 import org.apache.http.HttpHost;
 import org.apache.http.HttpRequest;
 import org.apache.http.NameValuePair;
+import org.apache.http.auth.AuthScope;
+import org.apache.http.auth.UsernamePasswordCredentials;
+import org.apache.http.client.CredentialsProvider;
 import org.apache.http.client.utils.URIBuilder;
+import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.apache.http.impl.nio.client.HttpAsyncClientBuilder;
 import org.apache.http.protocol.HttpContext;
 import org.apache.lucene.index.Term;
@@ -228,9 +232,20 @@ public final class ElasticSearchUtils {
 		boolean signRequests = Config.getConfigBoolean("es.sign_requests_to_aws", esHost.contains("amazonaws.com"));
 		HttpHost host = new HttpHost(esHost, esPort, esScheme);
 		RestClientBuilder clientBuilder = RestClient.builder(host);
+
+		List<RestClientBuilder.HttpClientConfigCallback> configurationCallbacks = new ArrayList<>();
+
 		if (signRequests) {
-			clientBuilder.setHttpClientConfigCallback(getAWSRequestSigningInterceptor(host.toURI()));
+			configurationCallbacks.add(getAWSRequestSigningInterceptor(host.toURI()));
 		}
+		configurationCallbacks.add(getAuthenticationCallback());
+
+		// register all customizations
+		clientBuilder.setHttpClientConfigCallback(httpClientBuilder -> {
+			configurationCallbacks.forEach(c -> c.customizeHttpClient(httpClientBuilder));
+			return httpClientBuilder;
+		});
+
 		restClient = new RestHighLevelClient(clientBuilder);
 
 		Para.addDestroyListener(new DestroyListener() {
@@ -1391,5 +1406,21 @@ public final class ElasticSearchUtils {
 			});
 			return httpClientBuilder;
 		};
+	}
+
+	static RestClientBuilder.HttpClientConfigCallback getAuthenticationCallback() {
+		final String basicAuthLogin = Config.getConfigParam("es.basic_auth_login", "");
+		final String basicAuthPassword = Config.getConfigParam("es.basic_auth_password", "");
+
+		if (StringUtils.isAnyEmpty(basicAuthLogin, basicAuthPassword)) {
+			// no authentication
+			return (HttpAsyncClientBuilder httpClientBuilder) -> httpClientBuilder;
+		} else {
+			// basic auth as documented by Elastic
+			final CredentialsProvider credentialsProvider = new BasicCredentialsProvider();
+			credentialsProvider.setCredentials(AuthScope.ANY,
+					new UsernamePasswordCredentials(basicAuthLogin, basicAuthPassword));
+			return (HttpAsyncClientBuilder httpClientBuilder) -> httpClientBuilder.setDefaultCredentialsProvider(credentialsProvider);
+		}
 	}
 }

@@ -66,6 +66,10 @@ para.es.sign_requests_to_aws = false
 para.es.aws_region = "eu-west-1"
 para.es.fail_on_indexing_errors = false
 para.es.track_total_hits = 10000
+# if login and password are filled then add for each request
+# the Authorization header with basic auth
+para.es.basic_auth_login = ""
+para.es.basic_auth_password = ""
 
 # asynchronous settings
 para.es.async_enabled = false
