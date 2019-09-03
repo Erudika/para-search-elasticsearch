@@ -62,6 +62,8 @@ para.es.transportclient_port = 9300
 para.es.restclient_scheme = "http"
 para.es.restclient_host = "localhost"
 para.es.restclient_port = 9200
+# context path of elasticsearch e.g. /es
+para.es.restclient_context_path = ""
 para.es.sign_requests_to_aws = false
 para.es.aws_region = "eu-west-1"
 para.es.fail_on_indexing_errors = false

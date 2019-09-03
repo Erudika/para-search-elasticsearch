@@ -233,6 +233,11 @@ public final class ElasticSearchUtils {
 		HttpHost host = new HttpHost(esHost, esPort, esScheme);
 		RestClientBuilder clientBuilder = RestClient.builder(host);
 
+		String esPrefix = Config.getConfigParam("es.restclient_context_path", "");
+		if (StringUtils.isNotEmpty(esPrefix)) {
+			clientBuilder.setPathPrefix(esPrefix);
+		}
+
 		List<RestClientBuilder.HttpClientConfigCallback> configurationCallbacks = new ArrayList<>();
 
 		if (signRequests) {
