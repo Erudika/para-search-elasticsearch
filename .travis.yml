@@ -4,7 +4,7 @@ install: true
 before_script:
   - sudo sysctl -w vm.max_map_count=262144
 jdk:
-  - openjdk8
+  - openjdk11
 script:
   - mvn clean install sonar:sonar
 addons:
