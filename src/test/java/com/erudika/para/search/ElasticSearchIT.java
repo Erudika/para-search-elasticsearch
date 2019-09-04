@@ -65,7 +65,7 @@ public class ElasticSearchIT extends SearchTest {
 		ElasticSearchUtils.deleteIndex(appid2);
 		ElasticSearchUtils.deleteIndex(appid3);
 		SearchTest.cleanup();
-		ElasticSearchUtils.shutdownClient();
+//		ElasticSearchUtils.shutdownClient();
 	}
 
 	@Test
@@ -162,10 +162,10 @@ public class ElasticSearchIT extends SearchTest {
 		assertEquals(2, s.getCount(app1, type).intValue());
 		assertEquals(1, s.getCount(app2, type).intValue());
 
-		List<Sysprop> l1 = s.findQuery(app1, type, "*");
-		assertEquals(2, l1.size());
-		List<Sysprop> l2 = s.findQuery(app2, type, "*");
-		assertEquals(l2.get(0), t2);
+		List<Sysprop> ls1 = s.findQuery(app1, type, "*");
+		assertEquals(2, ls1.size());
+		List<Sysprop> ls2 = s.findQuery(app2, type, "*");
+		assertEquals(ls2.get(0), t2);
 
 		s.unindexAll(Arrays.asList(t1, t2, t3));
 		ElasticSearchUtils.removeIndexAlias(root, app1);
