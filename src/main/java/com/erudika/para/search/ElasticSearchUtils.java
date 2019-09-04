@@ -117,6 +117,8 @@ import org.elasticsearch.search.sort.SortBuilders;
 import org.elasticsearch.search.sort.SortOrder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import software.amazon.awssdk.auth.credentials.AwsCredentials;
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.auth.signer.Aws4Signer;
 import software.amazon.awssdk.auth.signer.params.Aws4SignerParams;
 import software.amazon.awssdk.http.SdkHttpFullRequest;
@@ -1350,7 +1352,9 @@ public final class ElasticSearchUtils {
 		return (HttpAsyncClientBuilder httpClientBuilder) -> {
 			httpClientBuilder.addInterceptorLast((HttpRequest request, HttpContext context) -> {
 				Aws4Signer signer = Aws4Signer.create();
+				AwsCredentials creds = DefaultCredentialsProvider.create().resolveCredentials();
 				Aws4SignerParams.Builder<?> signerParams = Aws4SignerParams.builder().
+						awsCredentials(creds).
 						doubleUrlEncode(false).
 						signingName("es").
 						signingRegion(Region.of(Config.getConfigParam("es.aws_region", "eu-west-1")));
