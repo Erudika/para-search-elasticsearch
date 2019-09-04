@@ -4,9 +4,8 @@ install: true
 before_script:
   - sudo sysctl -w vm.max_map_count=262144
 jdk:
-  - oraclejdk8
+  - openjdk8
 script:
-  - jdk_switcher use oraclejdk8
   - mvn clean install sonar:sonar
 addons:
   sonarcloud:
