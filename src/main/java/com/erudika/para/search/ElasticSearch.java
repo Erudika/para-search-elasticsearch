@@ -530,7 +530,7 @@ public class ElasticSearch implements Search {
 		}
 
 		SearchHits hits = null;
-
+		String debugQuery = "";
 		try {
 			SearchRequest search = new SearchRequest(getIndexName(appid)).
 					searchType(SearchType.DFS_QUERY_THEN_FETCH).
@@ -547,7 +547,8 @@ public class ElasticSearch implements Search {
 				}
 			}
 
-			logger.debug("Elasticsearch query: {}", search.toString());
+			debugQuery = search.toString();
+			logger.debug("Elasticsearch query: {}", debugQuery);
 
 			hits = getRESTClient().search(search, RequestOptions.DEFAULT).getHits();
 			page.setCount(hits.getTotalHits().value);
@@ -560,7 +561,7 @@ public class ElasticSearch implements Search {
 		} catch (Exception e) {
 			Throwable cause = e.getCause();
 			String msg = cause != null ? cause.getMessage() : e.getMessage();
-			logger.warn("No search results for type '{}' in app '{}': {}.", type, appid, msg);
+			logger.warn("No search results for type '{}' in app '{}': {}.\nQuery: {}", type, appid, msg, debugQuery);
 		}
 
 		return hits;
