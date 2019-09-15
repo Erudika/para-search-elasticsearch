@@ -23,6 +23,7 @@ import com.erudika.para.core.Sysprop;
 import static com.erudika.para.search.SearchTest.appid1;
 import static com.erudika.para.search.SearchTest.u;
 import com.erudika.para.utils.Config;
+import com.erudika.para.utils.Pager;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -220,6 +221,10 @@ public class ElasticSearchIT extends SearchTest {
 		c2.addProperty("text", "We are testing this thing. This sentence is a test. One, two.");
 		c3.addProperty("text", "totally different text - kitty 3.");
 
+		c1.addProperty("year", 2018);
+		c2.addProperty("year", 2019);
+		c3.addProperty("year", 2020);
+
 		s.index(indexInNestedMode, c1);
 		s.index(indexInNestedMode, c2);
 		s.index(indexInNestedMode, c3);
@@ -316,6 +321,21 @@ public class ElasticSearchIT extends SearchTest {
 		assertEquals(1, s.findQuery(indexInNestedMode, "cat", "totally").size());
 		assertEquals(0, s.findQuery(indexInNestedMode, "cat", "totally AND properties.text:(testing*)").size());
 		assertEquals(3, s.findQuery(indexInNestedMode, "cat", "pet OR sentence").size());
+
+		// test nested sorting
+		Pager p = new Pager(1, "properties.year", true, 5);
+		List<ParaObject> rs1 = s.findQuery(indexInNestedMode, c1.getType(), "*", p);
+		assertEquals(3, rs1.size());
+		assertEquals("c3", rs1.get(0).getId());
+		assertEquals("c2", rs1.get(1).getId());
+		assertEquals("c1", rs1.get(2).getId());
+
+		p = new Pager(1, "properties.year", false, 5);
+		List<ParaObject> rs2 = s.findQuery(indexInNestedMode, c1.getType(), "*", p);
+		assertEquals(3, rs2.size());
+		assertEquals("c1", rs2.get(0).getId());
+		assertEquals("c2", rs2.get(1).getId());
+		assertEquals("c3", rs2.get(2).getId());
 
 		s.unindexAll(indexInNestedMode, Arrays.asList(c1, c2, c3));
 		ElasticSearchUtils.deleteIndex(indexInNestedMode);

@@ -118,11 +118,11 @@ synchronous indexing, the burden falls on the client application to try the inde
 BulkProcessor, however, offers a useful feature to automatically retry indexing requests with exponential
 backoff between retries. If the index request fails with a `EsRejectedExecutionException`, the request
 will be retried up to `para.es.bulk.max_num_retries` times. Even if your use case demands a high degree
-of confidence with respect to data consistency between your database (`DAO`) and index (`Search`), it's still 
-recommended to use asynchronous indexing with retries enabled. If you'd prefer to use asynchronous indexing but have 
-the BulkProcessor flushed upon every invocation of index/unindex/indexAll/unindexAll, simply enabled 
-`para.es.bulk.flush_immediately`. When this option is enabled, the BulkProcessor's flush method will be called 
-immediately after adding the documents in the request. This option is also useful for writing unit tests where you 
+of confidence with respect to data consistency between your database (`DAO`) and index (`Search`), it's still
+recommended to use asynchronous indexing with retries enabled. If you'd prefer to use asynchronous indexing but have
+the BulkProcessor flushed upon every invocation of index/unindex/indexAll/unindexAll, simply enabled
+`para.es.bulk.flush_immediately`. When this option is enabled, the BulkProcessor's flush method will be called
+immediately after adding the documents in the request. This option is also useful for writing unit tests where you
 want ensure the documents flush promptly.
 
 ### Indexing modes
@@ -168,6 +168,8 @@ Examples of query string queries:
 /v1/search?q=term AND properties.owner.age:[* TO 34]
 /v1/search?q=properties.owner.name:alice OR properties.owner.pets[1].name=whiskers
 ```
+**Note:** Sorting on nested fields works only with numeric data. For example, sorting on a field `properties.year` will
+work, but sorting on `properties.month` won't (applicable only to the "nested" mode).
 
 ### Calling Elasticsearch through the proxy endpoint
 
@@ -249,7 +251,7 @@ overhead of one index per app.
 
 ### Deprecation notice
 
-- Support for the ES Transport client has been removed because it is now deprecated and removed in ES 7.0. 
+- Support for the ES Transport client has been removed because it is now deprecated and removed in ES 7.0.
 - The previously bundled `IndexBasedDAO` has been removed because it had lots of issues.
 
 ### Requirements

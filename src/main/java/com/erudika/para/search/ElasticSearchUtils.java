@@ -100,6 +100,7 @@ import org.elasticsearch.common.xcontent.XContentType;
 import org.elasticsearch.index.query.BoolQueryBuilder;
 import org.elasticsearch.index.query.NestedQueryBuilder;
 import org.elasticsearch.index.query.QueryBuilder;
+import org.elasticsearch.index.query.QueryBuilders;
 import static org.elasticsearch.index.query.QueryBuilders.boolQuery;
 import static org.elasticsearch.index.query.QueryBuilders.fuzzyQuery;
 import static org.elasticsearch.index.query.QueryBuilders.matchAllQuery;
@@ -112,6 +113,8 @@ import static org.elasticsearch.index.query.QueryBuilders.termQuery;
 import static org.elasticsearch.index.query.QueryBuilders.wildcardQuery;
 import org.elasticsearch.index.query.RangeQueryBuilder;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
+import org.elasticsearch.search.sort.FieldSortBuilder;
+import org.elasticsearch.search.sort.NestedSortBuilder;
 import org.elasticsearch.search.sort.SortBuilder;
 import org.elasticsearch.search.sort.SortBuilders;
 import org.elasticsearch.search.sort.SortOrder;
@@ -539,13 +542,31 @@ public final class ElasticSearchUtils {
 					order = defaultOrder;
 					fieldName = field.trim();
 				}
-				sortFields.add(SortBuilders.fieldSort(fieldName).order(order));
+				if (nestedMode() && fieldName.startsWith(PROPS_PREFIX)) {
+					sortFields.add(getNestedFieldSort(fieldName, order));
+				} else {
+					sortFields.add(SortBuilders.fieldSort(fieldName).order(order));
+				}
 			}
 			return sortFields;
+		} else if (StringUtils.isBlank(pager.getSortby())) {
+			return Collections.singletonList(SortBuilders.scoreSort());
 		} else {
-			return Collections.singletonList(StringUtils.isBlank(pager.getSortby()) ?
-					SortBuilders.scoreSort() : SortBuilders.fieldSort(pager.getSortby()).order(defaultOrder));
+			String fieldName = pager.getSortby();
+			if (nestedMode() && fieldName.startsWith(PROPS_PREFIX)) {
+				return Collections.singletonList(getNestedFieldSort(fieldName, defaultOrder));
+			} else {
+				return Collections.singletonList(SortBuilders.fieldSort(fieldName).order(defaultOrder));
+			}
 		}
+	}
+
+	private static FieldSortBuilder getNestedFieldSort(String fieldName, SortOrder order) {
+		// nested sorting works only on numeric fields (sorting on properties.v requires fielddata enabled)
+		return SortBuilders.fieldSort(PROPS_FIELD + ".vn").order(order).
+							setNestedSort(new NestedSortBuilder(PROPS_FIELD).
+									setFilter(QueryBuilders.termQuery(PROPS_FIELD + ".k",
+											StringUtils.removeStart(fieldName, PROPS_FIELD + "."))));
 	}
 
 	/**
