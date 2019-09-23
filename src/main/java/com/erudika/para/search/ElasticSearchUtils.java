@@ -428,7 +428,7 @@ public final class ElasticSearchUtils {
 		try {
 			String indexName = app.getAppIdentifier().trim();
 			if (!existsIndex(indexName)) {
-				if (app.isShared()) {
+				if (app.isSharingIndex()) {
 					// add alias pointing to the root index
 					addIndexAliasWithRouting(getIndexName(Config.getRootAppIdentifier()), app.getAppIdentifier());
 				} else {
@@ -439,7 +439,7 @@ public final class ElasticSearchUtils {
 			String oldName = getIndexNameForAlias(indexName);
 			String newName = indexName;
 
-			if (!app.isShared()) {
+			if (!app.isSharingIndex()) {
 				if (StringUtils.isBlank(destinationIndex)) {
 					newName = getNewIndexName(indexName, oldName);
 					createIndexWithoutAlias(newName, -1, -1); // use defaults
@@ -447,8 +447,6 @@ public final class ElasticSearchUtils {
 					newName = destinationIndex;
 				}
 			}
-
-			logger.info("rebuildIndex(): {}", indexName);
 
 			List<DocWriteRequest<?>> batch = new LinkedList<>();
 			Pager p = getPager(pager);
@@ -467,7 +465,7 @@ public final class ElasticSearchUtils {
 						if (batch.size() >= batchSize) {
 							reindexedCount += batch.size();
 							executeRequests(batch);
-							logger.info("rebuildIndex(): indexed {}", batch.size());
+							logger.debug("rebuildIndex(): indexed {}", batch.size());
 							batch.clear();
 						}
 					}
@@ -478,14 +476,15 @@ public final class ElasticSearchUtils {
 			if (batch.size() > 0) {
 				reindexedCount += batch.size();
 				executeRequests(batch);
-				logger.info("rebuildIndex(): indexed {}", batch.size());
+				logger.debug("rebuildIndex(): indexed {}", batch.size());
 			}
 
-			if (!app.isShared()) {
+			if (!app.isSharingIndex()) {
 				// switch to alias NEW_INDEX -> ALIAS, OLD_INDEX -> DELETE old index
 				switchIndexToAlias(oldName, newName, indexName, true);
 			}
-			logger.info("rebuildIndex(): Done. {} objects reindexed.", reindexedCount);
+			logger.info("rebuildIndex(): {} objects reindexed in '{}' [shared: {}].",
+					reindexedCount, indexName, app.isSharingIndex());
 		} catch (Exception e) {
 			logger.warn(null, e);
 			return false;
@@ -716,9 +715,10 @@ public final class ElasticSearchUtils {
 	}
 
 	/**
+	 * Executes a batch of write requests.
 	 * @param requests a list of index/delete requests,
 	 */
-	static void executeRequests(List<DocWriteRequest<?>> requests) {
+	public static void executeRequests(List<DocWriteRequest<?>> requests) {
 		if (requests == null || requests.isEmpty()) {
 			return;
 		}
@@ -947,7 +947,7 @@ public final class ElasticSearchUtils {
 	 * @return a map of keys and values
 	 */
 	@SuppressWarnings("unchecked")
-	static Map<String, Object> getSourceFromParaObject(ParaObject po) {
+	public static Map<String, Object> getSourceFromParaObject(ParaObject po) {
 		if (po == null) {
 			return Collections.emptyMap();
 		}
