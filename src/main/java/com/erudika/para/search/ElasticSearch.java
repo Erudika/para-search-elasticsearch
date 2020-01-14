@@ -608,8 +608,7 @@ public class ElasticSearch implements Search {
 		}
 		Long count = 0L;
 		try {
-			CountRequest cr = new CountRequest(getIndexName(appid)).
-					source(SearchSourceBuilder.searchSource().query(query));
+			CountRequest cr = new CountRequest(getIndexName(appid)).query(query);
 			count = getRESTClient().count(cr, RequestOptions.DEFAULT).getCount();
 		} catch (Exception e) {
 			Throwable cause = e.getCause();
@@ -630,8 +629,7 @@ public class ElasticSearch implements Search {
 				query = boolQuery().must(query).must(termQuery(Config._TYPE, type));
 			}
 			try {
-				CountRequest cr = new CountRequest(getIndexName(appid)).
-					source(SearchSourceBuilder.searchSource().query(query));
+				CountRequest cr = new CountRequest(getIndexName(appid)).query(query);
 				count = getRESTClient().count(cr, RequestOptions.DEFAULT).getCount();
 			} catch (Exception e) {
 				Throwable cause = e.getCause();
