@@ -34,6 +34,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.junit.Test;
 import static org.junit.Assert.*;
 import org.junit.Ignore;
@@ -165,10 +167,10 @@ public abstract class SearchTest {
 	@Test
 	public void testfindNearby() {
 		assertTrue(s.findNearby(null, null, 100, 1, 1).isEmpty());
-		List<User> l1 = s.findNearby(u.getType(), "*", 10, 40.60, -73.90);
-		assertFalse(l1.isEmpty());
-		List<User> l2 = s.findNearby(a1.getType(), "*", 10, 40.60, -73.90);
-		assertFalse(l2.isEmpty());
+		List<User> ul1 = s.findNearby(u.getType(), "*", 10, 40.60, -73.90);
+		assertFalse(ul1.isEmpty());
+		List<User> ul2 = s.findNearby(a1.getType(), "*", 10, 40.60, -73.90);
+		assertFalse(ul2.isEmpty());
 	}
 
 	@Test
@@ -199,12 +201,16 @@ public abstract class SearchTest {
 	}
 
 	@Test
-	public void testFindNestedQuery() throws InterruptedException {
+	public void testFindNestedQuery() {
 		assertTrue(s.findNestedQuery(null, null, null).isEmpty());
 		assertTrue(s.findNestedQuery(l1.getType(), null, null).isEmpty());
 
-		assertFalse(s.findNestedQuery(l1.getType(), "properties.text", "kitty").isEmpty());
-		assertFalse(s.findNestedQuery(l1.getType(), "properties.text", "doggy").isEmpty());
+		List<?> n1 = s.findNestedQuery(l1.getType(), "properties.text", "kitty");
+		List<?> n2 = s.findNestedQuery(l1.getType(), "properties.text", "doggy");
+		assertEquals(1, n1.size());
+		assertEquals(1, n2.size());
+		assertEquals(2, ((Linker) n1.get(0)).getNstd().size());
+		assertEquals(2, ((Linker) n2.get(0)).getNstd().size());
 	}
 
 	@Test
@@ -343,7 +349,7 @@ public abstract class SearchTest {
 	}
 
 	@Test
-	public void testIndex() throws InterruptedException {
+	public void testIndex() {
 		s.index(null);
 		Sysprop ux = new Sysprop("test-xxx");
 		s.index(ux);
@@ -376,7 +382,9 @@ public abstract class SearchTest {
 		assertNull(s.findById(tx.getId()));
 		assertNull(s.findById(appid1, tx.getId()));
 		s.unindex(appid2, tx);
-		Thread.sleep(500);
+		try {
+			Thread.sleep(500);
+		} catch (InterruptedException ex) { }
 	}
 
 	@Test
@@ -389,56 +397,60 @@ public abstract class SearchTest {
 	}
 
 	@Test
-	public void testIndexAllUnindexAll() throws InterruptedException {
-		Tag tt1 = new Tag("test-all1");
-		Tag tt2 = new Tag("test-all2");
-		Tag tt3 = new Tag("test-all3");
-		List<Tag> tags = new ArrayList<Tag>();
-		tags.add(tt1);
-		tags.add(tt2);
-		tags.add(tt3);
+	public void testIndexAllUnindexAll() {
+		try {
+			Tag tt1 = new Tag("test-all1");
+			Tag tt2 = new Tag("test-all2");
+			Tag tt3 = new Tag("test-all3");
+			List<Tag> tags = new ArrayList<Tag>();
+			tags.add(tt1);
+			tags.add(tt2);
+			tags.add(tt3);
 
-		s.indexAll(tags);
+			s.indexAll(tags);
 
-		assertNotNull(s.findById(tt1.getId()));
-		assertNotNull(s.findById(tt2.getId()));
-		assertNotNull(s.findById(tt3.getId()));
+			assertNotNull(s.findById(tt1.getId()));
+			assertNotNull(s.findById(tt2.getId()));
+			assertNotNull(s.findById(tt3.getId()));
 
-		s.unindexAll(tags);
+			s.unindexAll(tags);
 
-		assertNull(s.findById(tt1.getId()));
-		assertNull(s.findById(tt2.getId()));
-		assertNull(s.findById(tt3.getId()));
+			assertNull(s.findById(tt1.getId()));
+			assertNull(s.findById(tt2.getId()));
+			assertNull(s.findById(tt3.getId()));
 
-		Sysprop sp1 = new Sysprop("sps1");
-		Sysprop sp2 = new Sysprop("sps2");
-		Sysprop sp3 = new Sysprop("sps3");
-		sp1.setName("xx");
-		sp2.setName("xx");
-		sp3.setName("sps3");
-		sp1.setTimestamp(123L);
-		sp2.setTimestamp(123L);
-		sp3.setTimestamp(1234L);
-		s.index(sp1);
-		s.index(sp2);
-		s.index(sp3);
+			Sysprop sp1 = new Sysprop("sps1");
+			Sysprop sp2 = new Sysprop("sps2");
+			Sysprop sp3 = new Sysprop("sps3");
+			sp1.setName("xx");
+			sp2.setName("xx");
+			sp3.setName("sps3");
+			sp1.setTimestamp(123L);
+			sp2.setTimestamp(123L);
+			sp3.setTimestamp(1234L);
+			s.index(sp1);
+			s.index(sp2);
+			s.index(sp3);
 
-		Thread.sleep(1000);
+			Thread.sleep(1000);
 
-		Map<String, Object> terms = new HashMap<String, Object>();
-		terms.put(Config._NAME, "xx");
-		terms.put(Config._TIMESTAMP, 123L);
+			Map<String, Object> terms = new HashMap<String, Object>();
+			terms.put(Config._NAME, "xx");
+			terms.put(Config._TIMESTAMP, 123L);
 
-		s.unindexAll(terms, true);
-		Thread.sleep(2000);
+			s.unindexAll(terms, true);
+			Thread.sleep(2000);
 
-		assertNull(s.findById(sp1.getId()));
-		assertNull(s.findById(sp2.getId()));
-		assertNotNull(s.findById(sp3.getId()));
+			assertNull(s.findById(sp1.getId()));
+			assertNull(s.findById(sp2.getId()));
+			assertNotNull(s.findById(sp3.getId()));
+		} catch (InterruptedException ex) {
+			Logger.getLogger(SearchTest.class.getName()).log(Level.SEVERE, null, ex);
+		}
 	}
 
 	@Test
-	public void testSearchAfter() throws InterruptedException {
+	public void testSearchAfter() {
 		ArrayList<Sysprop> list = new ArrayList<>();
 		for (int i = 0; i < 22; i++) {
 			Sysprop obj = new Sysprop("id_" + i);
@@ -447,7 +459,9 @@ public abstract class SearchTest {
 			list.add(obj);
 		}
 		s.indexAll(appid3, list);
-		Thread.sleep(1000);
+		try {
+			Thread.sleep(1000);
+		} catch (InterruptedException ex) { }
 
 		Pager p = new Pager(10);
 		p.setSortby("_docid");

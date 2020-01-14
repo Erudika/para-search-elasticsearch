@@ -95,7 +95,7 @@ public class ElasticSearchIT extends SearchTest {
 	}
 
 	@Test
-	public void testGetIndexNameForAlias() throws InterruptedException {
+	public void testGetIndexNameForAlias() {
 		String indexWithAlias = "test-index-with-alias";
 		ElasticSearchUtils.createIndex(indexWithAlias);
 		assertEquals("", ElasticSearchUtils.getIndexNameForAlias(""));
@@ -123,7 +123,7 @@ public class ElasticSearchIT extends SearchTest {
 	}
 
 	@Test
-	public void testSharedIndex() throws InterruptedException {
+	public void testSharedIndex() {
 		String app1 = "myapp1";
 		String app2 = " myapp2"; // IMPORTANT! See "para.prepend_shared_appids_with_space"
 		String root = Config.getRootAppIdentifier();
@@ -154,7 +154,9 @@ public class ElasticSearchIT extends SearchTest {
 		s.index(t2.getAppid(), t2);
 		s.index(t3.getAppid(), t3);
 
-		Thread.sleep(1200);
+		try {
+			Thread.sleep(1200);
+		} catch (InterruptedException ex) { }
 
 		// top view of all docs in shared index
 		assertEquals(1, s.getCount(root, "app").intValue());
@@ -174,7 +176,7 @@ public class ElasticSearchIT extends SearchTest {
 	}
 
 	@Test
-	public void testNestedIndexing() throws InterruptedException {
+	public void testNestedIndexing() {
 		System.setProperty("para.es.use_nested_custom_fields", "true");
 		String indexInNestedMode = "app-nested-mode";
 		ElasticSearchUtils.createIndex(indexInNestedMode);
@@ -229,7 +231,9 @@ public class ElasticSearchIT extends SearchTest {
 		s.index(indexInNestedMode, c2);
 		s.index(indexInNestedMode, c3);
 
-		Thread.sleep(1000);
+		try {
+			Thread.sleep(1000);
+		} catch (InterruptedException ex) { }
 
 		// findTermInList
 		ArrayList<String> terms1 = new ArrayList<String>();

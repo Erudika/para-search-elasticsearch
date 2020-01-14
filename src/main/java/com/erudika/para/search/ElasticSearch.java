@@ -492,7 +492,8 @@ public class ElasticSearch implements Search {
 				}
 
 				if (!objectsMissingFromDB.isEmpty()) {
-					logger.warn("Found {} objects in app '{}' that are indexed but not in the database: {}",
+					logger.warn("Found {} objects in app '{}' that are still indexed but deleted from the database: {}. "
+							+ "Sometimes this happens if you do a search right after a delete operation.",
 							objectsMissingFromDB.size(), appid, objectsMissingFromDB);
 				}
 			}
