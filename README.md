@@ -48,17 +48,10 @@ Here are all the configuration properties for this plugin (these go inside your 
 ```ini
 # enable this to bypass the DB and read all data straight from ES
 para.read_from_index = false
-para.es.cors_enabled = false
-para.es.cors_allow_origin = "localhost"
-para.es.discovery_type = "ec2"
-para.es.discovery_group = "elasticsearch"
 para.es.shards = 5
 para.es.replicas = 0
 para.es.dir = "data"
 para.es.auto_expand_replicas = "0-1"
-para.es.use_transportclient = false
-para.es.transportclient_host = "localhost"
-para.es.transportclient_port = 9300
 para.es.restclient_scheme = "http"
 para.es.restclient_host = "localhost"
 para.es.restclient_port = 9200
