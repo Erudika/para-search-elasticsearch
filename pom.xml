@@ -56,7 +56,7 @@
 		<skipITs>${skipTests}</skipITs>
 		<skipUTs>${skipTests}</skipUTs>
 		<elasticsearch.version>7.5.1</elasticsearch.version>
-		<jerseyVer>2.29.1</jerseyVer>
+		<jerseyVer>2.30</jerseyVer>
 	</properties>
 
 	<dependencies>
