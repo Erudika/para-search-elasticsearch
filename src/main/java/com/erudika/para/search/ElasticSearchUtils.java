@@ -91,7 +91,7 @@ import org.elasticsearch.client.RestHighLevelClient;
 import org.elasticsearch.client.indices.CreateIndexRequest;
 import org.elasticsearch.client.indices.GetIndexRequest;
 import org.elasticsearch.cluster.health.ClusterHealthStatus;
-import org.elasticsearch.cluster.metadata.AliasMetaData;
+import org.elasticsearch.cluster.metadata.AliasMetadata;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.unit.ByteSizeUnit;
 import org.elasticsearch.common.unit.ByteSizeValue;
@@ -691,7 +691,7 @@ public final class ElasticSearchUtils {
 			return appid;
 		}
 		try {
-			Map<String, Set<AliasMetaData>> aliases = getRESTClient().indices().
+			Map<String, Set<AliasMetadata>> aliases = getRESTClient().indices().
 					getAlias(new GetAliasesRequest().indices(appid), RequestOptions.DEFAULT).getAliases();
 			if (!aliases.isEmpty()) {
 				return aliases.keySet().iterator().next();

@@ -460,7 +460,7 @@ public abstract class SearchTest {
 		}
 		s.indexAll(appid3, list);
 		try {
-			Thread.sleep(1000);
+			Thread.sleep(1200);
 		} catch (InterruptedException ex) { }
 
 		Pager p = new Pager(10);
