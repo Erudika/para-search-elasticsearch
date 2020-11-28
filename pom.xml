@@ -55,7 +55,7 @@
 		<skipTests>false</skipTests>
 		<skipITs>${skipTests}</skipITs>
 		<skipUTs>${skipTests}</skipUTs>
-		<elasticsearch.version>7.9.2</elasticsearch.version>
+		<elasticsearch.version>7.10.0</elasticsearch.version>
 		<jerseyVer>2.32</jerseyVer>
 	</properties>
 
@@ -63,7 +63,7 @@
 		<dependency>
 			<groupId>com.erudika</groupId>
 			<artifactId>para-core</artifactId>
-			<version>1.38.0</version>
+			<version>1.38.1</version>
 			<scope>provided</scope>
 		</dependency>
 		<dependency>
@@ -76,6 +76,11 @@
 			<groupId>javax.activation</groupId>
 			<artifactId>javax.activation-api</artifactId>
 			<version>1.2.0</version>
+		</dependency>
+		<dependency>
+			<groupId>org.glassfish.jaxb</groupId>
+			<artifactId>jaxb-runtime</artifactId>
+			<version>2.3.3</version>
 		</dependency>
 
 		<!-- ELASTICSEARCH CLIENTS -->
