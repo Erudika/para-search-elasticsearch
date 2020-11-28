@@ -20,6 +20,7 @@ package com.erudika.para.search;
 import com.erudika.para.core.App;
 import com.erudika.para.core.ParaObject;
 import com.erudika.para.core.Sysprop;
+import static com.erudika.para.search.ElasticSearchUtils.deleteByQuery;
 import static com.erudika.para.search.SearchTest.appid1;
 import static com.erudika.para.search.SearchTest.u;
 import com.erudika.para.utils.Config;
@@ -30,6 +31,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import static org.elasticsearch.index.query.QueryBuilders.matchAllQuery;
 import org.junit.AfterClass;
 import static org.junit.Assert.*;
 import org.junit.BeforeClass;
@@ -170,7 +172,16 @@ public class ElasticSearchIT extends SearchTest {
 		List<Sysprop> ls2 = s.findQuery(app2, type, "*");
 		assertEquals(ls2.get(0), t2);
 
-		s.unindexAll(Arrays.asList(t1, t2, t3));
+		deleteByQuery(app2, matchAllQuery());
+		assertNull(s.findById(app2, t2.getId()));
+		assertNotNull(s.findById(app1, t1.getId()));
+		assertNotNull(s.findById(app1, t3.getId()));
+
+		deleteByQuery(app1, matchAllQuery());
+		assertNull(s.findById(app1, t1.getId()));
+		assertNull(s.findById(app1, t3.getId()));
+
+//		s.unindexAll(Arrays.asList(t1, t2, t3));
 		ElasticSearchUtils.removeIndexAlias(root, app1);
 		ElasticSearchUtils.removeIndexAlias(root, app2);
 	}

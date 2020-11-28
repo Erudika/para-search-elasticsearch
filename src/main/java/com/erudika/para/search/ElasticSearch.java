@@ -58,11 +58,8 @@ import org.elasticsearch.action.get.GetRequest;
 import org.elasticsearch.action.get.GetResponse;
 import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.action.search.SearchRequest;
-import org.elasticsearch.action.search.SearchResponse;
-import org.elasticsearch.action.search.SearchScrollRequest;
 import org.elasticsearch.action.search.SearchType;
 import org.elasticsearch.common.unit.DistanceUnit;
-import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.index.IndexNotFoundException;
 import org.elasticsearch.index.query.BoolQueryBuilder;
 import org.elasticsearch.index.query.MoreLikeThisQueryBuilder.Item;
@@ -70,7 +67,6 @@ import org.elasticsearch.index.query.QueryBuilder;
 import static org.elasticsearch.index.query.QueryBuilders.boolQuery;
 import static org.elasticsearch.index.query.QueryBuilders.geoDistanceQuery;
 import static org.elasticsearch.index.query.QueryBuilders.idsQuery;
-import static org.elasticsearch.index.query.QueryBuilders.matchAllQuery;
 import static org.elasticsearch.index.query.QueryBuilders.matchQuery;
 import static org.elasticsearch.index.query.QueryBuilders.moreLikeThisQuery;
 import static org.elasticsearch.index.query.QueryBuilders.nestedQuery;
@@ -81,16 +77,17 @@ import static org.elasticsearch.index.query.QueryBuilders.termsQuery;
 import static org.elasticsearch.index.query.QueryBuilders.wildcardQuery;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHits;
-import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.elasticsearch.search.sort.SortBuilder;
 import org.elasticsearch.search.sort.SortBuilders;
 import org.elasticsearch.search.sort.SortOrder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import static com.erudika.para.search.ElasticSearchUtils.executeRequests;
-import org.elasticsearch.action.DocWriteRequest;
+import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.client.RequestOptions;
 import org.elasticsearch.client.core.CountRequest;
+import static org.elasticsearch.index.query.QueryBuilders.matchAllQuery;
+import org.elasticsearch.index.reindex.BulkByScrollResponse;
 
 /**
  * An implementation of the {@link Search} interface using ElasticSearch.
@@ -101,6 +98,16 @@ public class ElasticSearch implements Search {
 
 	private static final Logger logger = LoggerFactory.getLogger(ElasticSearch.class);
 	private DAO dao;
+
+	static {
+		if (Config.isSearchEnabled() && Config.getConfigParam("search", "").
+				equalsIgnoreCase(ElasticSearch.class.getSimpleName())) {
+			ElasticSearchUtils.initClient();
+			// set up automatic index creation and deletion
+			App.addAppCreatedListener((App app) -> createIndexInternal(app));
+			App.addAppDeletedListener((App app) -> deleteIndexInternal(app));
+		}
+	}
 
 	/**
 	 * No-args constructor.
@@ -116,37 +123,6 @@ public class ElasticSearch implements Search {
 	@Inject
 	public ElasticSearch(DAO dao) {
 		this.dao = dao;
-		if (Config.isSearchEnabled()) {
-			if (Config.getConfigParam("search", "").equalsIgnoreCase(ElasticSearch.class.getSimpleName())) {
-				ElasticSearchUtils.initClient();
-			}
-			// set up automatic index creation and deletion
-			App.addAppCreatedListener((App app) -> {
-				if (app != null) {
-					String appid = app.getAppIdentifier();
-					if (app.isSharingIndex()) {
-						ElasticSearchUtils.addIndexAliasWithRouting(Config.getRootAppIdentifier(), appid);
-					} else {
-						int shards = app.isRootApp() ? Config.getConfigInt("es.shards", 5)
-								: Config.getConfigInt("es.shards_for_child_apps", 2);
-						int replicas = app.isRootApp() ? Config.getConfigInt("es.replicas", 0)
-								: Config.getConfigInt("es.replicas_for_child_apps", 0);
-						ElasticSearchUtils.createIndex(appid, shards, replicas);
-					}
-				}
-			});
-			App.addAppDeletedListener((App app) -> {
-				if (app != null) {
-					String appid = app.getAppIdentifier();
-					if (app.isSharingIndex()) {
-						// no need to manually cleanup the documents here - this is done in the DAO layer
-						ElasticSearchUtils.removeIndexAlias(Config.getRootAppIdentifier(), appid);
-					} else {
-						ElasticSearchUtils.deleteIndex(appid);
-					}
-				}
-			});
-		}
 	}
 
 	private DAO getDAO() {
@@ -192,39 +168,9 @@ public class ElasticSearch implements Search {
 			return;
 		}
 		try {
-			int batchSize = Config.getConfigInt("unindex_batch_size", 1000);
-			int unindexedCount = 0;
 			long time = System.nanoTime();
-			QueryBuilder fb = (terms == null || terms.isEmpty()) ? matchAllQuery() : getTermsQuery(terms, matchAll);
-			SearchRequest search = new SearchRequest(getIndexName(appid)).
-					scroll(new TimeValue(60000)).
-					source(SearchSourceBuilder.searchSource().query(fb).size(batchSize));
-			SearchResponse scrollResp = getRESTClient().search(search, RequestOptions.DEFAULT);
-
-			List<DocWriteRequest<?>> batch = new LinkedList<>();
-			while (true) {
-				batch.addAll(Arrays.stream(scrollResp.getHits().getHits()).
-						filter(Objects::nonNull).
-						map(hit -> new DeleteRequest(getIndexName(appid)).id(hit.getId())).
-						collect(Collectors.toList()));
-
-				if (batch.size() >= batchSize) {
-					unindexedCount += batch.size();
-					executeRequests(batch);
-					batch.clear();
-				}
-				// next page
-				SearchScrollRequest scroll = new SearchScrollRequest(scrollResp.getScrollId()).
-						scroll(new TimeValue(60000));
-				scrollResp = getRESTClient().scroll(scroll, RequestOptions.DEFAULT);
-				if (scrollResp.getHits().getHits().length == 0) {
-					break;
-				}
-			}
-			if (batch.size() > 0) {
-				unindexedCount += batch.size();
-				executeRequests(batch);
-			}
+			long unindexedCount = ElasticSearchUtils.deleteByQuery(appid,
+					(terms == null || terms.isEmpty()) ? matchAllQuery() : getTermsQuery(terms, matchAll));
 			time = System.nanoTime() - time;
 			logger.info("Unindexed {} documents without failures, took {}s.",
 					unindexedCount, TimeUnit.NANOSECONDS.toSeconds(time));
@@ -653,6 +599,49 @@ public class ElasticSearch implements Search {
 	@Override
 	public boolean isValidQueryString(String queryString) {
 		return ElasticSearchUtils.isValidQueryString(queryString);
+	}
+
+	@Override
+	public void createIndex(App app) {
+		createIndexInternal(app);
+	}
+
+	private static void createIndexInternal(App app) {
+		if (app != null) {
+			String appid = app.getAppIdentifier();
+			if (app.isSharingIndex()) {
+				ElasticSearchUtils.addIndexAliasWithRouting(Config.getRootAppIdentifier(), appid);
+			} else {
+				int shards = app.isRootApp() ? Config.getConfigInt("es.shards", 2)
+						: Config.getConfigInt("es.shards_for_child_apps", 1);
+				int replicas = app.isRootApp() ? Config.getConfigInt("es.replicas", 0)
+						: Config.getConfigInt("es.replicas_for_child_apps", 0);
+				ElasticSearchUtils.createIndex(appid, shards, replicas);
+			}
+		}
+	}
+
+	@Override
+	public void deleteIndex(App app) {
+		deleteIndexInternal(app);
+	}
+
+	private static void deleteIndexInternal(App app) {
+		if (app != null) {
+			String appid = app.getAppIdentifier();
+			if (app.isSharingIndex()) {
+				ElasticSearchUtils.deleteByQuery(app.getAppIdentifier(), matchAllQuery(),
+						new ActionListener<BulkByScrollResponse>() {
+					public void onResponse(BulkByScrollResponse res) { }
+					public void onFailure(Exception ex) {
+						logger.error("Failed to delete all objects in shared index for app '" + appid + "'", ex);
+					}
+				});
+				ElasticSearchUtils.removeIndexAlias(Config.getRootAppIdentifier(), appid);
+			} else {
+				ElasticSearchUtils.deleteIndex(appid);
+			}
+		}
 	}
 
 	//////////////////////////////////////////////////////////////

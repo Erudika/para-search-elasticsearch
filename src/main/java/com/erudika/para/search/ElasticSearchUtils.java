@@ -112,6 +112,8 @@ import static org.elasticsearch.index.query.QueryBuilders.rangeQuery;
 import static org.elasticsearch.index.query.QueryBuilders.termQuery;
 import static org.elasticsearch.index.query.QueryBuilders.wildcardQuery;
 import org.elasticsearch.index.query.RangeQueryBuilder;
+import org.elasticsearch.index.reindex.BulkByScrollResponse;
+import org.elasticsearch.index.reindex.DeleteByQueryRequest;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.elasticsearch.search.sort.FieldSortBuilder;
 import org.elasticsearch.search.sort.NestedSortBuilder;
@@ -301,7 +303,7 @@ public final class ElasticSearchUtils {
 			return false;
 		}
 		if (shards <= 0) {
-			shards = Config.getConfigInt("es.shards", 5);
+			shards = Config.getConfigInt("es.shards", 2);
 		}
 		if (replicas < 0) {
 			replicas = Config.getConfigInt("es.replicas", 0);
@@ -337,7 +339,7 @@ public final class ElasticSearchUtils {
 	 * @return true if created
 	 */
 	public static boolean createIndex(String appid) {
-		return createIndex(appid, Config.getConfigInt("es.shards", 5), Config.getConfigInt("es.replicas", 0));
+		return createIndex(appid, Config.getConfigInt("es.shards", 2), Config.getConfigInt("es.replicas", 0));
 	}
 
 	/**
@@ -507,6 +509,64 @@ public final class ElasticSearchUtils {
 	}
 
 	/**
+	 * Executes a delete_by_query request to ES and refreshes the index.
+	 * @param appid the appid / index alias
+	 * @param fb query
+	 * @return number of unindexed documents.
+	 */
+	public static long deleteByQuery(String appid, QueryBuilder fb) {
+		return deleteByQuery(appid, fb, asyncEnabled() ? new ActionListener<BulkByScrollResponse>() {
+			public void onResponse(BulkByScrollResponse res) {
+				logger.debug(res.getStatus().toString());
+			}
+			public void onFailure(Exception ex) {
+				logger.error("Delete by query reqest failed for app '" + appid + "'", ex);
+			}
+		} : null);
+	}
+
+	/**
+	 * Executes a delete_by_query request to ES and refreshes the index.
+	 * @param appid the appid / index alias
+	 * @param fb query
+	 * @param cb callback
+	 * @return number of unindexed documents.
+	 */
+	public static long deleteByQuery(String appid, QueryBuilder fb, ActionListener<BulkByScrollResponse> cb) {
+		int batchSize = Config.getConfigInt("unindex_batch_size", 1000);
+		boolean isSharingIndex = !App.isRoot(appid) && StringUtils.startsWith(appid, " ");
+		String indexName = getIndexName(appid);
+		DeleteByQueryRequest deleteByQueryReq = new DeleteByQueryRequest(indexName);
+		deleteByQueryReq.setConflicts("proceed");
+		deleteByQueryReq.setQuery(fb);
+		deleteByQueryReq.setBatchSize(batchSize);
+		deleteByQueryReq.setSlices(1); // parallelize operation?
+		deleteByQueryReq.setScroll(TimeValue.timeValueMinutes(10));
+		deleteByQueryReq.setRefresh(true);
+		if (isSharingIndex) {
+			deleteByQueryReq.setRouting(indexName);
+		}
+		if (cb != null) {
+			getRESTClient().deleteByQueryAsync(deleteByQueryReq, RequestOptions.DEFAULT, cb);
+		} else {
+			BulkByScrollResponse res;
+			try {
+				res = getRESTClient().deleteByQuery(deleteByQueryReq, RequestOptions.DEFAULT);
+				if (!res.getBulkFailures().isEmpty()) {
+					logger.warn("Bulk failure in deleteByQuery()!", res.getBulkFailures().iterator().next().getCause());
+				}
+				if (!res.getSearchFailures().isEmpty()) {
+					logger.warn("Search failure in deleteByQuery()!", res.getSearchFailures().iterator().next().getReason());
+				}
+				return res.getTotal();
+			} catch (IOException ex) {
+				logger.error(null, ex);
+			}
+		}
+		return 0L;
+	}
+
+	/**
 	 * @param pager an array of optional Pagers
 	 * @return the first {@link Pager} object in the array or a new Pager
 	 */
@@ -618,14 +678,14 @@ public final class ElasticSearchUtils {
 		if (StringUtils.isBlank(aliasName) || !existsIndex(indexName)) {
 			return false;
 		}
+		String alias = aliasName.trim();
 		try {
-			String alias = aliasName.trim();
 			String index = getIndexNameWithWildcard(indexName.trim());
 			AliasActions removeAction = AliasActions.remove().index(index).alias(alias);
 			IndicesAliasesRequest actions = new IndicesAliasesRequest().addAliasAction(removeAction);
 			return getRESTClient().indices().updateAliases(actions, RequestOptions.DEFAULT).isAcknowledged();
 		} catch (Exception e) {
-			logger.error(null, e);
+			logger.warn("Failed to remove index alias '" + alias + "' for index " + indexName + ": {}", e.getMessage());
 			return false;
 		}
 	}
