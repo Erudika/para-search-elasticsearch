@@ -99,6 +99,7 @@ import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.xcontent.XContentType;
 import org.elasticsearch.index.query.BoolQueryBuilder;
 import org.elasticsearch.index.query.NestedQueryBuilder;
+import org.elasticsearch.index.query.Operator;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
 import static org.elasticsearch.index.query.QueryBuilders.boolQuery;
@@ -1351,8 +1352,8 @@ public final class ElasticSearchUtils {
 		if (StringUtils.isBlank(k) || (query == null && StringUtils.isBlank(v))) {
 			return matchAllQuery();
 		}
-		QueryBuilder kQuery = matchQuery(PROPS_PREFIX + "k", getNestedKey(k));
-		QueryBuilder vQuery = (query == null) ? matchQuery(getValueFieldName(v), v) : query;
+		QueryBuilder kQuery = matchQuery(PROPS_PREFIX + "k", getNestedKey(k)).operator(Operator.AND);
+		QueryBuilder vQuery = (query == null) ? matchQuery(getValueFieldName(v), v).operator(Operator.AND) : query;
 		if ("*".equals(v) || matchAllQuery().equals(query)) {
 			return boolQuery().must(kQuery);
 		}
