@@ -19,3 +19,5 @@ echo "" >> changelog.txt && \
 echo "### :package: [Download JAR](https://oss.sonatype.org/service/local/repositories/releases/content/com/erudika/para-search-elasticsearch/${ver}/para-search-elasticsearch-${ver}-shaded.jar)" >> changelog.txt && \
 hub release create -F changelog.txt $ver && \
 rm changelog.txt
+
+docker build -t erudikaltd/para-search-elasticsearch:${ver} . && docker push erudikaltd/para-search-elasticsearch:${ver}
