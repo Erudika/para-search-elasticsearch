@@ -408,7 +408,8 @@ public class ElasticSearch implements Search {
 		}
 		List<P> results = new ArrayList<P>(hits.getHits().length);
 		List<String> keys = new LinkedList<String>();
-		boolean readFromIndex = Config.getConfigBoolean("read_from_index", Config.ENVIRONMENT.equals("embedded"));
+		boolean readFromIndex = Config.getConfigBoolean("read_from_index", false);
+		boolean cleanupIndex = Config.getConfigBoolean("sync_index_with_db", true);
 		try {
 			for (SearchHit hit : hits) {
 				if (readFromIndex) {
@@ -421,7 +422,7 @@ public class ElasticSearch implements Search {
 			}
 
 			if (!readFromIndex && !keys.isEmpty()) {
-				List<String> objectsMissingFromDB = new ArrayList<String>(results.size());
+				List<P> objectsMissingFromDB = new ArrayList<>(results.size());
 				Map<String, P> fromDB = getDAO().readAll(appid, keys, true);
 				for (int i = 0; i < keys.size(); i++) {
 					String key = keys.get(i);
@@ -430,7 +431,7 @@ public class ElasticSearch implements Search {
 						pobj = ElasticSearchUtils.getParaObjectFromSource(hits.getAt(i).getSourceAsMap());
 						// show warning that object is still in index but not in DB
 						if (pobj != null && appid.equals(pobj.getAppid()) && pobj.getStored()) {
-							objectsMissingFromDB.add(key);
+							objectsMissingFromDB.add(pobj);
 						}
 					}
 					if (pobj != null) {
@@ -439,9 +440,16 @@ public class ElasticSearch implements Search {
 				}
 
 				if (!objectsMissingFromDB.isEmpty()) {
-					logger.warn("Found {} objects in app '{}' that are still indexed but deleted from the database: {}. "
-							+ "Sometimes this happens if you do a search right after a delete operation.",
-							objectsMissingFromDB.size(), appid, objectsMissingFromDB);
+					if (cleanupIndex) {
+						unindexAllInternal(appid, objectsMissingFromDB);
+						logger.debug("Removed {} objects from index in app '{}' that were not found in database: {}.",
+								objectsMissingFromDB.size(), appid,
+								objectsMissingFromDB.stream().map(o -> o.getId()).collect(Collectors.toList()));
+					} else {
+						logger.warn("Found {} objects in app '{}' that are still indexed but deleted from the database: {}. "
+								+ "Sometimes this happens if you do a search right after a delete operation.",
+								objectsMissingFromDB.size(), appid, objectsMissingFromDB);
+					}
 				}
 			}
 		} catch (Exception e) {
