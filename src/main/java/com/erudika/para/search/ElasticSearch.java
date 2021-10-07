@@ -440,16 +440,7 @@ public class ElasticSearch implements Search {
 				}
 
 				if (!objectsMissingFromDB.isEmpty()) {
-					if (cleanupIndex) {
-						unindexAllInternal(appid, objectsMissingFromDB);
-						logger.debug("Removed {} objects from index in app '{}' that were not found in database: {}.",
-								objectsMissingFromDB.size(), appid,
-								objectsMissingFromDB.stream().map(o -> o.getId()).collect(Collectors.toList()));
-					} else {
-						logger.warn("Found {} objects in app '{}' that are still indexed but deleted from the database: {}. "
-								+ "Sometimes this happens if you do a search right after a delete operation.",
-								objectsMissingFromDB.size(), appid, objectsMissingFromDB);
-					}
+					handleMissingObjects(appid, objectsMissingFromDB, cleanupIndex);
 				}
 			}
 		} catch (Exception e) {
@@ -458,6 +449,19 @@ public class ElasticSearch implements Search {
 			logger.warn("Search query failed for app '{}': {}", appid, msg);
 		}
 		return results;
+	}
+
+	private <P extends ParaObject> void handleMissingObjects(String appid, List<P> objectsMissingFromDB, boolean cleanupIndex) {
+		if (cleanupIndex) {
+			unindexAllInternal(appid, objectsMissingFromDB);
+			logger.debug("Removed {} objects from index in app '{}' that were not found in database: {}.",
+					objectsMissingFromDB.size(), appid,
+					objectsMissingFromDB.stream().map(o -> o.getId()).collect(Collectors.toList()));
+		} else {
+			logger.warn("Found {} objects in app '{}' that are still indexed but deleted from the database: {}. "
+					+ "Sometimes this happens if you do a search right after a delete operation.",
+					objectsMissingFromDB.size(), appid, objectsMissingFromDB);
+		}
 	}
 
 	/**
