@@ -249,7 +249,7 @@ public final class ElasticSearchUtils {
 		List<RestClientBuilder.HttpClientConfigCallback> configurationCallbacks = new ArrayList<>();
 
 		if (signRequests) {
-			configurationCallbacks.add(getAWSRequestSigningInterceptor(host.toURI()));
+			configurationCallbacks.add(getAWSRequestSigningInterceptor(host.getSchemeName() + "://" + host.getHostName()));
 		}
 		configurationCallbacks.add(getAuthenticationCallback());
 
@@ -1437,7 +1437,7 @@ public final class ElasticSearchUtils {
 				AwsCredentials creds = DefaultCredentialsProvider.create().resolveCredentials();
 				Aws4SignerParams.Builder<?> signerParams = Aws4SignerParams.builder().
 						awsCredentials(creds).
-						doubleUrlEncode(false).
+						doubleUrlEncode(true).
 						signingName("es").
 						signingRegion(Region.of(Config.getConfigParam("es.aws_region", "eu-west-1")));
 				URIBuilder uriBuilder;
@@ -1486,10 +1486,10 @@ public final class ElasticSearchUtils {
 						r.putHeader(header.getName(), header.getValue());
 					}
 
-					signer.sign(r.build(), signerParams.build());
+					SdkHttpFullRequest signedReq = signer.sign(r.build(), signerParams.build());
 
-					for (String header : r.headers().keySet()) {
-						request.setHeader(header, r.firstMatchingHeader(header).orElse(""));
+					for (String header : signedReq.headers().keySet()) {
+						request.setHeader(header, signedReq.firstMatchingHeader(header).orElse(""));
 					}
 				} catch (Exception ex) {
 					logger.error("Failed to sign request to AWS Elasticsearch:", ex);
