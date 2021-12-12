@@ -1193,7 +1193,7 @@ public final class ElasticSearchUtils {
 	 */
 	private static QueryBuilder rewriteQuery(Query q, int depth) throws IllegalAccessException {
 		if (depth > MAX_QUERY_DEPTH) {
-			throw new IllegalArgumentException("`Query depth exceeded! Max depth: " + MAX_QUERY_DEPTH);
+			throw new IllegalArgumentException("Query depth exceeded! Max depth: " + MAX_QUERY_DEPTH + " - " + q.toString());
 		}
 		QueryBuilder qb = null;
 		if (q instanceof BooleanQuery) {

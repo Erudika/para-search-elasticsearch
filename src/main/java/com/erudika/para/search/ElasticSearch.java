@@ -521,7 +521,7 @@ public class ElasticSearch implements Search {
 		} catch (Exception e) {
 			Throwable cause = e.getCause();
 			String msg = cause != null ? cause.getMessage() : e.getMessage();
-			logger.warn("No search results for type '{}' in app '{}': {}.\nQuery: {}", type, appid, msg, debugQuery);
+			logger.debug("No search results for type '{}' in app '{}': {}.\nQuery: {}", type, appid, msg, debugQuery);
 		}
 
 		return hits;
