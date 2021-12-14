@@ -804,7 +804,7 @@ public final class ElasticSearchUtils {
 	private static BulkProcessor bulkProcessor(RestHighLevelClient client) {
 		if (bulkProcessor == null) {
 			bulkProcessor = configureBulkProcessor(BulkProcessor.builder((request, bulkListener) ->
-					client.bulkAsync(request, RequestOptions.DEFAULT, bulkListener), getAsyncRequestListener()));
+					client.bulkAsync(request, RequestOptions.DEFAULT, bulkListener), getAsyncRequestListener(), "bulk"));
 		}
 		return bulkProcessor;
 	}

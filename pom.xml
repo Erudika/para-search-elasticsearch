@@ -55,7 +55,7 @@
 		<skipTests>false</skipTests>
 		<skipITs>${skipTests}</skipITs>
 		<skipUTs>${skipTests}</skipUTs>
-		<elasticsearch.version>7.10.2</elasticsearch.version>
+		<elasticsearch.version>7.13.4</elasticsearch.version>
 		<jerseyVer>2.35</jerseyVer>
 	</properties>
 
@@ -63,7 +63,7 @@
 		<dependency>
 			<groupId>com.erudika</groupId>
 			<artifactId>para-core</artifactId>
-			<version>1.41.3</version>
+			<version>1.42.0</version>
 			<scope>provided</scope>
 		</dependency>
 		<dependency>
@@ -133,10 +133,12 @@
 					<skip>${skipITs}</skip>
 					<!--<autoCreateIndex>false</autoCreateIndex>-->
 					<version>${elasticsearch.version}</version>
-					<flavour>oss</flavour>
+					<flavour>default</flavour>
 					<clusterName>test</clusterName>
 					<tcpPort>9300</tcpPort>
 					<httpPort>9200</httpPort>
+					<logLevel>ERROR</logLevel>
+					<timeout>120</timeout>
 					<instanceCount>1</instanceCount>
 				</configuration>
 				<executions>
