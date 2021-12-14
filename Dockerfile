@@ -1,4 +1,4 @@
-FROM openjdk:11-jre-slim
+FROM adoptopenjdk/openjdk11:ubi-minimal-jre
 
 RUN mkdir -p /para/lib
 
