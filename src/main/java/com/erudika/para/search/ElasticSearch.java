@@ -53,41 +53,41 @@ import javax.inject.Singleton;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.math.NumberUtils;
 import static org.apache.lucene.search.join.ScoreMode.Avg;
-import org.elasticsearch.action.delete.DeleteRequest;
-import org.elasticsearch.action.get.GetRequest;
-import org.elasticsearch.action.get.GetResponse;
-import org.elasticsearch.action.index.IndexRequest;
-import org.elasticsearch.action.search.SearchRequest;
-import org.elasticsearch.action.search.SearchType;
-import org.elasticsearch.common.unit.DistanceUnit;
-import org.elasticsearch.index.IndexNotFoundException;
-import org.elasticsearch.index.query.BoolQueryBuilder;
-import org.elasticsearch.index.query.MoreLikeThisQueryBuilder.Item;
-import org.elasticsearch.index.query.QueryBuilder;
-import static org.elasticsearch.index.query.QueryBuilders.boolQuery;
-import static org.elasticsearch.index.query.QueryBuilders.geoDistanceQuery;
-import static org.elasticsearch.index.query.QueryBuilders.idsQuery;
-import static org.elasticsearch.index.query.QueryBuilders.matchQuery;
-import static org.elasticsearch.index.query.QueryBuilders.moreLikeThisQuery;
-import static org.elasticsearch.index.query.QueryBuilders.nestedQuery;
-import static org.elasticsearch.index.query.QueryBuilders.prefixQuery;
-import static org.elasticsearch.index.query.QueryBuilders.queryStringQuery;
-import static org.elasticsearch.index.query.QueryBuilders.termQuery;
-import static org.elasticsearch.index.query.QueryBuilders.termsQuery;
-import static org.elasticsearch.index.query.QueryBuilders.wildcardQuery;
-import org.elasticsearch.search.SearchHit;
-import org.elasticsearch.search.SearchHits;
-import org.elasticsearch.search.sort.SortBuilder;
-import org.elasticsearch.search.sort.SortBuilders;
-import org.elasticsearch.search.sort.SortOrder;
+import org.opensearch.action.delete.DeleteRequest;
+import org.opensearch.action.get.GetRequest;
+import org.opensearch.action.get.GetResponse;
+import org.opensearch.action.index.IndexRequest;
+import org.opensearch.action.search.SearchRequest;
+import org.opensearch.action.search.SearchType;
+import org.opensearch.common.unit.DistanceUnit;
+import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.index.query.BoolQueryBuilder;
+import org.opensearch.index.query.MoreLikeThisQueryBuilder.Item;
+import org.opensearch.index.query.QueryBuilder;
+import static org.opensearch.index.query.QueryBuilders.boolQuery;
+import static org.opensearch.index.query.QueryBuilders.geoDistanceQuery;
+import static org.opensearch.index.query.QueryBuilders.idsQuery;
+import static org.opensearch.index.query.QueryBuilders.matchQuery;
+import static org.opensearch.index.query.QueryBuilders.moreLikeThisQuery;
+import static org.opensearch.index.query.QueryBuilders.nestedQuery;
+import static org.opensearch.index.query.QueryBuilders.prefixQuery;
+import static org.opensearch.index.query.QueryBuilders.queryStringQuery;
+import static org.opensearch.index.query.QueryBuilders.termQuery;
+import static org.opensearch.index.query.QueryBuilders.termsQuery;
+import static org.opensearch.index.query.QueryBuilders.wildcardQuery;
+import org.opensearch.search.SearchHit;
+import org.opensearch.search.SearchHits;
+import org.opensearch.search.sort.SortBuilder;
+import org.opensearch.search.sort.SortBuilders;
+import org.opensearch.search.sort.SortOrder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import static com.erudika.para.search.ElasticSearchUtils.executeRequests;
-import org.elasticsearch.action.ActionListener;
-import org.elasticsearch.client.RequestOptions;
-import org.elasticsearch.client.core.CountRequest;
-import static org.elasticsearch.index.query.QueryBuilders.matchAllQuery;
-import org.elasticsearch.index.reindex.BulkByScrollResponse;
+import org.opensearch.action.ActionListener;
+import org.opensearch.client.RequestOptions;
+import org.opensearch.client.core.CountRequest;
+import static org.opensearch.index.query.QueryBuilders.matchAllQuery;
+import org.opensearch.index.reindex.BulkByScrollResponse;
 
 /**
  * An implementation of the {@link Search} interface using ElasticSearch.
@@ -561,7 +561,7 @@ public class ElasticSearch implements Search {
 		}
 		QueryBuilder query;
 		if (!StringUtils.isBlank(type)) {
-			query = termQuery(Config._TYPE, type);
+			query = boolQuery().must(termQuery(Config._TYPE, type));
 		} else {
 			query = matchAllQuery();
 		}

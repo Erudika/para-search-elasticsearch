@@ -58,9 +58,9 @@ import org.apache.http.client.utils.URIBuilder;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.InputStreamEntity;
 import org.apache.http.message.BasicHeader;
-import org.elasticsearch.client.Request;
-import org.elasticsearch.client.RequestOptions;
-import org.elasticsearch.client.RestClient;
+import org.opensearch.client.Request;
+import org.opensearch.client.RequestOptions;
+import org.opensearch.client.RestClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -130,7 +130,7 @@ public class ProxyResourceHandler implements CustomResourceHandler {
 			HttpEntity resp;
 			RestClient client = getClient();
 			if (client != null) {
-				org.elasticsearch.client.Request esRequest = new Request(method, path);
+				org.opensearch.client.Request esRequest = new Request(method, path);
 				RequestOptions.Builder opts = RequestOptions.DEFAULT.toBuilder();
 				for (Header header : headers) {
 					opts.addHeader(header.getName(), header.getValue());
