@@ -87,8 +87,16 @@
 		<dependency>
 			<groupId>org.opensearch.client</groupId>
 			<artifactId>opensearch-rest-high-level-client</artifactId>
-			<version>1.2.1</version>
+			<version>1.2.2</version>
 		</dependency>
+
+		<!-- LOGGING -->
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>log4j-over-slf4j</artifactId>
+			<version>1.7.32</version>
+		</dependency>
+
 
 		<!-- TESTING -->
 		<dependency>
@@ -254,7 +262,6 @@
 					<serverId>ossrh</serverId>
 					<nexusUrl>https://oss.sonatype.org/</nexusUrl>
 					<autoReleaseAfterClose>true</autoReleaseAfterClose>
-					<stagingProgressTimeoutMinutes>30</stagingProgressTimeoutMinutes>
 				</configuration>
 			</plugin>
 
