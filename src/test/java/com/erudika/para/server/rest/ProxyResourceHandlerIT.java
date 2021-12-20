@@ -17,9 +17,11 @@
  */
 package com.erudika.para.server.rest;
 
+import com.erudika.para.server.search.rest.ProxyResourceHandler;
+import com.erudika.para.server.search.rest.ProxySubResourceHandler;
 import com.erudika.para.core.utils.ParaObjectUtils;
 import com.erudika.para.core.rest.GenericExceptionMapper;
-import static com.erudika.para.server.rest.ProxyResourceHandler.PATH;
+import static com.erudika.para.server.search.rest.ProxyResourceHandler.PATH;
 import com.erudika.para.core.utils.Utils;
 import com.erudika.para.server.search.ElasticSearchUtils;
 import com.fasterxml.jackson.jaxrs.json.JacksonJsonProvider;

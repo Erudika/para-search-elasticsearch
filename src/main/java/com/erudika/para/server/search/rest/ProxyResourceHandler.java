@@ -15,7 +15,7 @@
  *
  * For issues and patches go to: https://github.com/erudika
  */
-package com.erudika.para.server.rest;
+package com.erudika.para.server.search.rest;
 
 import com.erudika.para.core.listeners.DestroyListener;
 import com.erudika.para.core.utils.Para;
@@ -198,7 +198,7 @@ public class ProxyResourceHandler implements CustomResourceHandler {
 		return StringUtils.isBlank(path) ? "_search" : path;
 	}
 
-	String getCleanPath(String appid, String path) {
+	public String getCleanPath(String appid, String path) {
 		if (StringUtils.containsIgnoreCase(path, "getRawResponse")) {
 			try {
 				URIBuilder uri = new URIBuilder(path);

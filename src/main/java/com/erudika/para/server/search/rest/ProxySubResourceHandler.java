@@ -15,10 +15,10 @@
  *
  * For issues and patches go to: https://github.com/erudika
  */
-package com.erudika.para.server.rest;
+package com.erudika.para.server.search.rest;
 
 import com.erudika.para.core.rest.CustomResourceHandler;
-import static com.erudika.para.server.rest.ProxyResourceHandler.PATH;
+import static com.erudika.para.server.search.rest.ProxyResourceHandler.PATH;
 
 /**
  * Acts as a proxy for Elasticsearch and handles request to the custom resouce path {@code /v1/_elasticsearch/{path} }.
