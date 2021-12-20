@@ -15,29 +15,20 @@
  *
  * For issues and patches go to: https://github.com/erudika
  */
-package com.erudika.para.search;
+package com.erudika.para.server.search;
 
 import com.erudika.para.core.Address;
 import com.erudika.para.core.App;
 import com.erudika.para.core.ParaObject;
 import com.erudika.para.core.Tag;
 import com.erudika.para.core.utils.CoreUtils;
-import com.erudika.para.persistence.DAO;
-import static com.erudika.para.search.ElasticSearchUtils.PROPS_PREFIX;
-import static com.erudika.para.search.ElasticSearchUtils.convertQueryStringToNestedQuery;
-import static com.erudika.para.search.ElasticSearchUtils.getIndexName;
-import static com.erudika.para.search.ElasticSearchUtils.getNestedKey;
-import static com.erudika.para.search.ElasticSearchUtils.getPager;
-import static com.erudika.para.search.ElasticSearchUtils.getRESTClient;
-import static com.erudika.para.search.ElasticSearchUtils.getTermsQuery;
-import static com.erudika.para.search.ElasticSearchUtils.getValueFieldName;
-import static com.erudika.para.search.ElasticSearchUtils.keyValueBoolQuery;
-import static com.erudika.para.search.ElasticSearchUtils.nestedMode;
-import static com.erudika.para.search.ElasticSearchUtils.nestedPropsQuery;
-import static com.erudika.para.search.ElasticSearchUtils.qs;
-import com.erudika.para.utils.Config;
-import com.erudika.para.utils.Pager;
-import com.erudika.para.utils.Utils;
+import com.erudika.para.core.persistence.DAO;
+import com.erudika.para.core.search.Search;
+import com.erudika.para.core.utils.Config;
+import com.erudika.para.core.utils.Pager;
+import com.erudika.para.core.utils.Utils;
+import static com.erudika.para.server.search.ElasticSearchUtils.PROPS_PREFIX;
+import static com.erudika.para.server.search.ElasticSearchUtils.convertQueryStringToNestedQuery;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -82,7 +73,17 @@ import org.opensearch.search.sort.SortBuilders;
 import org.opensearch.search.sort.SortOrder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import static com.erudika.para.search.ElasticSearchUtils.executeRequests;
+import static com.erudika.para.server.search.ElasticSearchUtils.executeRequests;
+import static com.erudika.para.server.search.ElasticSearchUtils.getIndexName;
+import static com.erudika.para.server.search.ElasticSearchUtils.getNestedKey;
+import static com.erudika.para.server.search.ElasticSearchUtils.getPager;
+import static com.erudika.para.server.search.ElasticSearchUtils.getRESTClient;
+import static com.erudika.para.server.search.ElasticSearchUtils.getTermsQuery;
+import static com.erudika.para.server.search.ElasticSearchUtils.getValueFieldName;
+import static com.erudika.para.server.search.ElasticSearchUtils.keyValueBoolQuery;
+import static com.erudika.para.server.search.ElasticSearchUtils.nestedMode;
+import static com.erudika.para.server.search.ElasticSearchUtils.nestedPropsQuery;
+import static com.erudika.para.server.search.ElasticSearchUtils.qs;
 import org.opensearch.action.ActionListener;
 import org.opensearch.client.RequestOptions;
 import org.opensearch.client.core.CountRequest;

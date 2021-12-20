@@ -15,18 +15,19 @@
  *
  * For issues and patches go to: https://github.com/erudika
  */
-package com.erudika.para.rest;
+package com.erudika.para.server.rest;
 
-import com.erudika.para.DestroyListener;
-import com.erudika.para.Para;
+import com.erudika.para.core.listeners.DestroyListener;
+import com.erudika.para.core.utils.Para;
 import com.erudika.para.core.App;
 import com.erudika.para.core.ParaObject;
 import com.erudika.para.core.utils.CoreUtils;
 import com.erudika.para.core.utils.ParaObjectUtils;
-import com.erudika.para.persistence.DAO;
-import com.erudika.para.search.ElasticSearchUtils;
-import com.erudika.para.utils.Config;
-import com.erudika.para.utils.Pager;
+import com.erudika.para.core.persistence.DAO;
+import com.erudika.para.core.rest.CustomResourceHandler;
+import com.erudika.para.core.utils.Config;
+import com.erudika.para.core.utils.Pager;
+import com.erudika.para.server.search.ElasticSearchUtils;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.io.IOException;
 import java.io.InputStream;

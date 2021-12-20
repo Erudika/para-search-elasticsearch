@@ -15,16 +15,15 @@
  *
  * For issues and patches go to: https://github.com/erudika
  */
-package com.erudika.para.search;
+package com.erudika.para.server.search;
 
 import com.erudika.para.core.App;
 import com.erudika.para.core.ParaObject;
 import com.erudika.para.core.Sysprop;
-import static com.erudika.para.search.ElasticSearchUtils.deleteByQuery;
-import static com.erudika.para.search.SearchTest.appid1;
-import static com.erudika.para.search.SearchTest.u;
-import com.erudika.para.utils.Config;
-import com.erudika.para.utils.Pager;
+import static com.erudika.para.server.search.SearchTest.appid1;
+import static com.erudika.para.server.search.SearchTest.u;
+import com.erudika.para.core.utils.Config;
+import com.erudika.para.core.utils.Pager;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -173,12 +172,12 @@ public class ElasticSearchIT extends SearchTest {
 		List<Sysprop> ls2 = s.findQuery(app2, type, "*");
 		assertEquals(ls2.get(0), t2);
 
-		deleteByQuery(app2, matchAllQuery());
+		ElasticSearchUtils.deleteByQuery(app2, matchAllQuery());
 		assertNull(s.findById(app2, t2.getId()));
 		assertNotNull(s.findById(app1, t1.getId()));
 		assertNotNull(s.findById(app1, t3.getId()));
 
-		deleteByQuery(app1, matchAllQuery());
+		ElasticSearchUtils.deleteByQuery(app1, matchAllQuery());
 		assertNull(s.findById(app1, t1.getId()));
 		assertNull(s.findById(app1, t3.getId()));
 

@@ -15,12 +15,13 @@
  *
  * For issues and patches go to: https://github.com/erudika
  */
-package com.erudika.para.rest;
+package com.erudika.para.server.rest;
 
 import com.erudika.para.core.utils.ParaObjectUtils;
-import static com.erudika.para.rest.ProxyResourceHandler.PATH;
-import com.erudika.para.search.ElasticSearchUtils;
-import com.erudika.para.utils.Utils;
+import com.erudika.para.core.rest.GenericExceptionMapper;
+import static com.erudika.para.server.rest.ProxyResourceHandler.PATH;
+import com.erudika.para.core.utils.Utils;
+import com.erudika.para.server.search.ElasticSearchUtils;
 import com.fasterxml.jackson.jaxrs.json.JacksonJsonProvider;
 import java.util.Collections;
 import java.util.Map;
