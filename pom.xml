@@ -346,6 +346,7 @@
 									<aggregate>true</aggregate>
 									<quiet>true</quiet>
 									<docfilessubdirs>true</docfilessubdirs>
+									<failOnError>false</failOnError>
 								</configuration>
 							</execution>
 						</executions>
