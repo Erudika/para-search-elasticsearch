@@ -1,2 +1,2 @@
-com.erudika.para.server.rest.ProxyResourceHandler
-com.erudika.para.server.rest.ProxySubResourceHandler
+com.erudika.para.server.search.rest.ProxyResourceHandler
+com.erudika.para.server.search.rest.ProxySubResourceHandler

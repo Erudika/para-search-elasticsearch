@@ -39,8 +39,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
-import javax.inject.Inject;
-import javax.inject.Singleton;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.math.NumberUtils;
 import static org.apache.lucene.search.join.ScoreMode.Avg;
@@ -94,7 +92,6 @@ import org.opensearch.index.reindex.BulkByScrollResponse;
  * An implementation of the {@link Search} interface using ElasticSearch.
  * @author Alex Bogdanovski [alex@erudika.com]
  */
-@Singleton
 public class ElasticSearch implements Search {
 
 	private static final Logger logger = LoggerFactory.getLogger(ElasticSearch.class);
@@ -121,7 +118,6 @@ public class ElasticSearch implements Search {
 	 * Default constructor.
 	 * @param dao an instance of the persistence class
 	 */
-	@Inject
 	public ElasticSearch(DAO dao) {
 		this.dao = dao;
 	}
