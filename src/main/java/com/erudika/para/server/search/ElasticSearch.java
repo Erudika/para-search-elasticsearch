@@ -82,6 +82,8 @@ import static com.erudika.para.server.search.ElasticSearchUtils.keyValueBoolQuer
 import static com.erudika.para.server.search.ElasticSearchUtils.nestedMode;
 import static com.erudika.para.server.search.ElasticSearchUtils.nestedPropsQuery;
 import static com.erudika.para.server.search.ElasticSearchUtils.qs;
+import javax.inject.Inject;
+import javax.inject.Singleton;
 import org.opensearch.action.ActionListener;
 import org.opensearch.client.RequestOptions;
 import org.opensearch.client.core.CountRequest;
@@ -92,6 +94,7 @@ import org.opensearch.index.reindex.BulkByScrollResponse;
  * An implementation of the {@link Search} interface using ElasticSearch.
  * @author Alex Bogdanovski [alex@erudika.com]
  */
+@Singleton
 public class ElasticSearch implements Search {
 
 	private static final Logger logger = LoggerFactory.getLogger(ElasticSearch.class);
@@ -118,6 +121,7 @@ public class ElasticSearch implements Search {
 	 * Default constructor.
 	 * @param dao an instance of the persistence class
 	 */
+	@Inject
 	public ElasticSearch(DAO dao) {
 		this.dao = dao;
 	}
