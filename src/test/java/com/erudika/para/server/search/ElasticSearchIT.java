@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2021 Erudika. https://erudika.com
+ * Copyright 2013-2022 Erudika. https://erudika.com
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import static com.erudika.para.server.search.SearchTest.appid1;
 import static com.erudika.para.server.search.SearchTest.u;
 import com.erudika.para.core.utils.Config;
 import com.erudika.para.core.utils.Pager;
+import com.erudika.para.core.utils.Para;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -54,7 +55,7 @@ public class ElasticSearchIT extends SearchTest {
 		//System.setProperty("para.es.async_enabled", "true");
 		//System.setProperty("para.es.bulk.concurrent_requests", "0");
 		s = new ElasticSearch();
-		ElasticSearchUtils.createIndex(Config.getRootAppIdentifier());
+		ElasticSearchUtils.createIndex(Para.getConfig().getRootAppIdentifier());
 		ElasticSearchUtils.createIndex(appid1);
 		ElasticSearchUtils.createIndex(appid2);
 		ElasticSearchUtils.createIndex(appid3);
@@ -63,7 +64,7 @@ public class ElasticSearchIT extends SearchTest {
 
 	@AfterClass
 	public static void tearDownClass() {
-		ElasticSearchUtils.deleteIndex(Config.getRootAppIdentifier());
+		ElasticSearchUtils.deleteIndex(Para.getConfig().getRootAppIdentifier());
 		ElasticSearchUtils.deleteIndex(appid1);
 		ElasticSearchUtils.deleteIndex(appid2);
 		ElasticSearchUtils.deleteIndex(appid3);
@@ -128,7 +129,7 @@ public class ElasticSearchIT extends SearchTest {
 	public void testSharedIndex() {
 		String app1 = "myapp1";
 		String app2 = " myapp2"; // IMPORTANT! See "para.prepend_shared_appids_with_space"
-		String root = Config.getRootAppIdentifier();
+		String root = Para.getConfig().getRootAppIdentifier();
 		String type = "cat";
 
 		App rootApp = new App("rootapp");

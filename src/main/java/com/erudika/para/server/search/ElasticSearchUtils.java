@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2021 Erudika. https://erudika.com
+ * Copyright 2013-2022 Erudika. https://erudika.com
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -160,21 +160,21 @@ public final class ElasticSearchUtils {
 	 * containing custom properties. This mode prevents an eventual field mapping explosion.
 	 */
 	static boolean nestedMode() {
-		return Config.getConfigBoolean("es.use_nested_custom_fields", false);
+		return Para.getConfig().getConfigBoolean("es.use_nested_custom_fields", false);
 	}
 
 	/**
 	 * @return true if asynchronous indexing/unindexing is enabled.
 	 */
 	static boolean asyncEnabled() {
-		return Config.getConfigBoolean("es.async_enabled", false);
+		return Para.getConfig().getConfigBoolean("es.async_enabled", false);
 	}
 
 	/**
 	 * @return true if we want the bulk processor to flush immediately after each bulk request.
 	 */
 	static boolean flushImmediately() {
-		return Config.getConfigBoolean("es.bulk.flush_immediately", true);
+		return Para.getConfig().getConfigBoolean("es.bulk.flush_immediately", true);
 	}
 
 	/**
@@ -234,14 +234,14 @@ public final class ElasticSearchUtils {
 		if (restClient != null) {
 			return restClient;
 		}
-		String esScheme = Config.getConfigParam("es.restclient_scheme", Config.IN_PRODUCTION ? "https" : "http");
-		String esHost = Config.getConfigParam("es.restclient_host", "localhost");
-		int esPort = Config.getConfigInt("es.restclient_port", 9200);
-		boolean signRequests = Config.getConfigBoolean("es.sign_requests_to_aws", esHost.contains("amazonaws.com"));
+		String esScheme = Para.getConfig().getConfigParam("es.restclient_scheme", Para.getConfig().inProduction() ? "https" : "http");
+		String esHost = Para.getConfig().getConfigParam("es.restclient_host", "localhost");
+		int esPort = Para.getConfig().getConfigInt("es.restclient_port", 9200);
+		boolean signRequests = Para.getConfig().getConfigBoolean("es.sign_requests_to_aws", esHost.contains("amazonaws.com"));
 		HttpHost host = new HttpHost(esHost, esPort, esScheme);
 		RestClientBuilder clientBuilder = RestClient.builder(host);
 
-		String esPrefix = Config.getConfigParam("es.restclient_context_path", "");
+		String esPrefix = Para.getConfig().getConfigParam("es.restclient_context_path", "");
 		if (StringUtils.isNotEmpty(esPrefix)) {
 			clientBuilder.setPathPrefix(esPrefix);
 		}
@@ -266,8 +266,8 @@ public final class ElasticSearchUtils {
 				shutdownClient();
 			}
 		});
-		if (!existsIndex(Config.getRootAppIdentifier())) {
-			createIndex(Config.getRootAppIdentifier());
+		if (!existsIndex(Para.getConfig().getRootAppIdentifier())) {
+			createIndex(Para.getConfig().getRootAppIdentifier());
 		}
 		return restClient;
 	}
@@ -304,16 +304,16 @@ public final class ElasticSearchUtils {
 			return false;
 		}
 		if (shards <= 0) {
-			shards = Config.getConfigInt("es.shards", 2);
+			shards = Para.getConfig().getConfigInt("es.shards", 2);
 		}
 		if (replicas < 0) {
-			replicas = Config.getConfigInt("es.replicas", 0);
+			replicas = Para.getConfig().getConfigInt("es.replicas", 0);
 		}
 		try {
 			Settings.Builder settings = Settings.builder();
 			settings.put("number_of_shards", Integer.toString(shards));
 			settings.put("number_of_replicas", Integer.toString(replicas));
-			settings.put("auto_expand_replicas", Config.getConfigParam("es.auto_expand_replicas", "0-1"));
+			settings.put("auto_expand_replicas", Para.getConfig().getConfigParam("es.auto_expand_replicas", "0-1"));
 			settings.put("analysis.analyzer.default.type", "standard");
 			settings.putList("analysis.analyzer.default.stopwords",
 					"arabic", "armenian", "basque", "brazilian", "bulgarian", "catalan",
@@ -340,7 +340,7 @@ public final class ElasticSearchUtils {
 	 * @return true if created
 	 */
 	public static boolean createIndex(String appid) {
-		return createIndex(appid, Config.getConfigInt("es.shards", 2), Config.getConfigInt("es.replicas", 0));
+		return createIndex(appid, Para.getConfig().getConfigInt("es.shards", 2), Para.getConfig().getConfigInt("es.replicas", 0));
 	}
 
 	/**
@@ -357,7 +357,7 @@ public final class ElasticSearchUtils {
 		String indexName = appid.trim() + "_1";
 		boolean created = createIndexWithoutAlias(indexName, shards, replicas);
 		if (created) {
-			boolean withAliasRouting = App.isRoot(appid) && Config.getConfigBoolean("es.root_index_sharing_enabled", false);
+			boolean withAliasRouting = App.isRoot(appid) && Para.getConfig().getConfigBoolean("es.root_index_sharing_enabled", false);
 			boolean aliased = addIndexAlias(indexName, appid, withAliasRouting);
 			if (!aliased) {
 				logger.info("Created ES index '{}' without an alias '{}'.", indexName, appid);
@@ -433,7 +433,7 @@ public final class ElasticSearchUtils {
 			if (!existsIndex(indexName)) {
 				if (app.isSharingIndex()) {
 					// add alias pointing to the root index
-					addIndexAliasWithRouting(getIndexName(Config.getRootAppIdentifier()), app.getAppIdentifier());
+					addIndexAliasWithRouting(getIndexName(Para.getConfig().getRootAppIdentifier()), app.getAppIdentifier());
 				} else {
 					logger.info("Creating '{}' index because it doesn't exist.", indexName);
 					createIndex(indexName);
@@ -453,7 +453,7 @@ public final class ElasticSearchUtils {
 
 			List<DocWriteRequest<?>> batch = new LinkedList<>();
 			Pager p = getPager(pager);
-			int batchSize = Config.getConfigInt("reindex_batch_size", p.getLimit());
+			int batchSize = Para.getConfig().getConfigInt("reindex_batch_size", p.getLimit());
 			long reindexedCount = 0;
 
 			List<ParaObject> list;
@@ -534,7 +534,7 @@ public final class ElasticSearchUtils {
 	 * @return number of unindexed documents.
 	 */
 	public static long deleteByQuery(String appid, QueryBuilder fb, ActionListener<BulkByScrollResponse> cb) {
-		int batchSize = Config.getConfigInt("unindex_batch_size", 1000);
+		int batchSize = Para.getConfig().getConfigInt("unindex_batch_size", 1000);
 		boolean isSharingIndex = !App.isRoot(appid) && StringUtils.startsWith(appid, " ");
 		String indexName = getIndexName(appid);
 		DeleteByQueryRequest deleteByQueryReq = new DeleteByQueryRequest(indexName);
@@ -810,12 +810,12 @@ public final class ElasticSearchUtils {
 	}
 
 	private static BulkProcessor configureBulkProcessor(BulkProcessor.Builder builder) {
-		final int sizeLimit = Config.getConfigInt("es.bulk.size_limit_mb", 5);
-		final int actionLimit = Config.getConfigInt("es.bulk.action_limit", 1000);
-		final int concurrentRequests = Config.getConfigInt("es.bulk.concurrent_requests", 1);
-		final int flushInterval = Config.getConfigInt("es.bulk.flush_interval_ms", 5000);
-		final int backoffInitialDelayMs = Config.getConfigInt("es.bulk.backoff_initial_delay_ms", 50);
-		final int backoffNumRetries = Config.getConfigInt("es.bulk.max_num_retries", 8);
+		final int sizeLimit = Para.getConfig().getConfigInt("es.bulk.size_limit_mb", 5);
+		final int actionLimit = Para.getConfig().getConfigInt("es.bulk.action_limit", 1000);
+		final int concurrentRequests = Para.getConfig().getConfigInt("es.bulk.concurrent_requests", 1);
+		final int flushInterval = Para.getConfig().getConfigInt("es.bulk.flush_interval_ms", 5000);
+		final int backoffInitialDelayMs = Para.getConfig().getConfigInt("es.bulk.backoff_initial_delay_ms", 50);
+		final int backoffNumRetries = Para.getConfig().getConfigInt("es.bulk.max_num_retries", 8);
 		builder.setBulkSize(new ByteSizeValue(sizeLimit, ByteSizeUnit.MB));
 		builder.setBulkActions(actionLimit);
 		builder.setConcurrentRequests(concurrentRequests);
@@ -883,7 +883,7 @@ public final class ElasticSearchUtils {
 	}
 
 	private static void handleFailedRequests(Throwable t) {
-		if (t != null && Config.getConfigBoolean("es.fail_on_indexing_errors", false)) {
+		if (t != null && Para.getConfig().getConfigBoolean("es.fail_on_indexing_errors", false)) {
 			throw new RuntimeException("Synchronous indexing operation failed!", t);
 		}
 	}
@@ -1042,7 +1042,7 @@ public final class ElasticSearchUtils {
 	 * @return source builder instance
 	 */
 	static SearchSourceBuilder getSourceBuilder(QueryBuilder query, int max) {
-		String trackTotalHits = Config.getConfigParam("es.track_total_hits", "");
+		String trackTotalHits = Para.getConfig().getConfigParam("es.track_total_hits", "");
 		SearchSourceBuilder source = new SearchSourceBuilder().query(query).size(max);
 		if (NumberUtils.isDigits(trackTotalHits)) {
 			source.trackTotalHitsUpTo(NumberUtils.toInt(trackTotalHits, Config.DEFAULT_LIMIT));
@@ -1439,7 +1439,7 @@ public final class ElasticSearchUtils {
 						awsCredentials(creds).
 						doubleUrlEncode(true).
 						signingName("es").
-						signingRegion(Region.of(Config.getConfigParam("es.aws_region", "eu-west-1")));
+						signingRegion(Region.of(Para.getConfig().getConfigParam("es.aws_region", "eu-west-1")));
 				URIBuilder uriBuilder;
 				String httpMethod = request.getRequestLine().getMethod();
 				String resourcePath;
@@ -1500,8 +1500,8 @@ public final class ElasticSearchUtils {
 	}
 
 	static RestClientBuilder.HttpClientConfigCallback getAuthenticationCallback() {
-		final String basicAuthLogin = Config.getConfigParam("es.basic_auth_login", "");
-		final String basicAuthPassword = Config.getConfigParam("es.basic_auth_password", "");
+		final String basicAuthLogin = Para.getConfig().getConfigParam("es.basic_auth_login", "");
+		final String basicAuthPassword = Para.getConfig().getConfigParam("es.basic_auth_password", "");
 
 		if (StringUtils.isAnyEmpty(basicAuthLogin, basicAuthPassword)) {
 			// no authentication

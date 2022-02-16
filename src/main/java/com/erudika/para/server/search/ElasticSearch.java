@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2021 Erudika. https://erudika.com
+ * Copyright 2013-2022 Erudika. https://erudika.com
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ import com.erudika.para.core.persistence.DAO;
 import com.erudika.para.core.search.Search;
 import com.erudika.para.core.utils.Config;
 import com.erudika.para.core.utils.Pager;
+import com.erudika.para.core.utils.Para;
 import com.erudika.para.core.utils.Utils;
 import static com.erudika.para.server.search.ElasticSearchUtils.PROPS_PREFIX;
 import static com.erudika.para.server.search.ElasticSearchUtils.convertQueryStringToNestedQuery;
@@ -101,7 +102,7 @@ public class ElasticSearch implements Search {
 	private DAO dao;
 
 	static {
-		if (Config.isSearchEnabled() && Config.getConfigParam("search", "").
+		if (Para.getConfig().isSearchEnabled() && Para.getConfig().getConfigParam("search", "").
 				equalsIgnoreCase(ElasticSearch.class.getSimpleName())) {
 			ElasticSearchUtils.initClient();
 			// set up automatic index creation and deletion
@@ -409,8 +410,8 @@ public class ElasticSearch implements Search {
 		}
 		List<P> results = new ArrayList<P>(hits.getHits().length);
 		List<String> keys = new LinkedList<String>();
-		boolean readFromIndex = Config.getConfigBoolean("read_from_index", false);
-		boolean cleanupIndex = Config.getConfigBoolean("sync_index_with_db", true);
+		boolean readFromIndex = Para.getConfig().getConfigBoolean("read_from_index", false);
+		boolean cleanupIndex = Para.getConfig().getConfigBoolean("sync_index_with_db", true);
 		try {
 			for (SearchHit hit : hits) {
 				if (readFromIndex) {
@@ -481,7 +482,7 @@ public class ElasticSearch implements Search {
 		SortOrder order = page.isDesc() ? SortOrder.DESC : SortOrder.ASC;
 		int max = page.getLimit();
 		int pageNum = (int) page.getPage();
-		int start = (pageNum < 1 || pageNum > Config.MAX_PAGES) ? 0 : (pageNum - 1) * max;
+		int start = (pageNum < 1 || pageNum > Para.getConfig().maxPages()) ? 0 : (pageNum - 1) * max;
 
 		if (query == null) {
 			query = matchAllQuery();
@@ -624,12 +625,12 @@ public class ElasticSearch implements Search {
 		if (app != null) {
 			String appid = app.getAppIdentifier();
 			if (app.isSharingIndex()) {
-				ElasticSearchUtils.addIndexAliasWithRouting(Config.getRootAppIdentifier(), appid);
+				ElasticSearchUtils.addIndexAliasWithRouting(Para.getConfig().getRootAppIdentifier(), appid);
 			} else {
-				int shards = app.isRootApp() ? Config.getConfigInt("es.shards", 2)
-						: Config.getConfigInt("es.shards_for_child_apps", 1);
-				int replicas = app.isRootApp() ? Config.getConfigInt("es.replicas", 0)
-						: Config.getConfigInt("es.replicas_for_child_apps", 0);
+				int shards = app.isRootApp() ? Para.getConfig().getConfigInt("es.shards", 2)
+						: Para.getConfig().getConfigInt("es.shards_for_child_apps", 1);
+				int replicas = app.isRootApp() ? Para.getConfig().getConfigInt("es.replicas", 0)
+						: Para.getConfig().getConfigInt("es.replicas_for_child_apps", 0);
 				ElasticSearchUtils.createIndex(appid, shards, replicas);
 			}
 		}
@@ -651,7 +652,7 @@ public class ElasticSearch implements Search {
 						logger.error("Failed to delete all objects in shared index for app '" + appid + "'", ex);
 					}
 				});
-				ElasticSearchUtils.removeIndexAlias(Config.getRootAppIdentifier(), appid);
+				ElasticSearchUtils.removeIndexAlias(Para.getConfig().getRootAppIdentifier(), appid);
 			} else {
 				ElasticSearchUtils.deleteIndex(appid);
 			}
@@ -662,7 +663,7 @@ public class ElasticSearch implements Search {
 
 	@Override
 	public void index(ParaObject object) {
-		indexAllInternal(Config.getRootAppIdentifier(), Collections.singletonList(object));
+		indexAllInternal(Para.getConfig().getRootAppIdentifier(), Collections.singletonList(object));
 	}
 
 	@Override
@@ -672,7 +673,7 @@ public class ElasticSearch implements Search {
 
 	@Override
 	public void unindex(ParaObject object) {
-		unindexAllInternal(Config.getRootAppIdentifier(), Collections.singletonList(object));
+		unindexAllInternal(Para.getConfig().getRootAppIdentifier(), Collections.singletonList(object));
 	}
 
 	@Override
@@ -682,7 +683,7 @@ public class ElasticSearch implements Search {
 
 	@Override
 	public <P extends ParaObject> void indexAll(List<P> objects) {
-		indexAllInternal(Config.getRootAppIdentifier(), objects);
+		indexAllInternal(Para.getConfig().getRootAppIdentifier(), objects);
 	}
 
 	@Override
@@ -692,7 +693,7 @@ public class ElasticSearch implements Search {
 
 	@Override
 	public <P extends ParaObject> void unindexAll(List<P> objects) {
-		unindexAllInternal(Config.getRootAppIdentifier(), objects);
+		unindexAllInternal(Para.getConfig().getRootAppIdentifier(), objects);
 	}
 
 	@Override
@@ -702,7 +703,7 @@ public class ElasticSearch implements Search {
 
 	@Override
 	public void unindexAll(Map<String, ?> terms, boolean matchAll) {
-		unindexAllInternal(Config.getRootAppIdentifier(), terms, matchAll);
+		unindexAllInternal(Para.getConfig().getRootAppIdentifier(), terms, matchAll);
 	}
 
 	@Override
@@ -712,7 +713,7 @@ public class ElasticSearch implements Search {
 
 	@Override
 	public <P extends ParaObject> P findById(String id) {
-		return findByIdInternal(Config.getRootAppIdentifier(), id);
+		return findByIdInternal(Para.getConfig().getRootAppIdentifier(), id);
 	}
 
 	@Override
@@ -722,7 +723,7 @@ public class ElasticSearch implements Search {
 
 	@Override
 	public <P extends ParaObject> List<P> findByIds(List<String> ids) {
-		return findByIdsInternal(Config.getRootAppIdentifier(), ids);
+		return findByIdsInternal(Para.getConfig().getRootAppIdentifier(), ids);
 	}
 
 	@Override
@@ -733,7 +734,7 @@ public class ElasticSearch implements Search {
 	@Override
 	public <P extends ParaObject> List<P> findNearby(String type,
 			String query, int radius, double lat, double lng, Pager... pager) {
-		return findNearbyInternal(Config.getRootAppIdentifier(), type, query, radius, lat, lng, pager);
+		return findNearbyInternal(Para.getConfig().getRootAppIdentifier(), type, query, radius, lat, lng, pager);
 	}
 
 	@Override
@@ -744,7 +745,7 @@ public class ElasticSearch implements Search {
 
 	@Override
 	public <P extends ParaObject> List<P> findPrefix(String type, String field, String prefix, Pager... pager) {
-		return findPrefixInternal(Config.getRootAppIdentifier(), type, field, prefix, pager);
+		return findPrefixInternal(Para.getConfig().getRootAppIdentifier(), type, field, prefix, pager);
 	}
 
 	@Override
@@ -754,7 +755,7 @@ public class ElasticSearch implements Search {
 
 	@Override
 	public <P extends ParaObject> List<P> findQuery(String type, String query, Pager... pager) {
-		return findQueryInternal(Config.getRootAppIdentifier(), type, query, pager);
+		return findQueryInternal(Para.getConfig().getRootAppIdentifier(), type, query, pager);
 	}
 
 	@Override
@@ -764,7 +765,7 @@ public class ElasticSearch implements Search {
 
 	@Override
 	public <P extends ParaObject> List<P> findNestedQuery(String type, String field, String query, Pager... pager) {
-		return findNestedQueryInternal(Config.getRootAppIdentifier(), type, field, query, pager);
+		return findNestedQueryInternal(Para.getConfig().getRootAppIdentifier(), type, field, query, pager);
 	}
 
 	@Override
@@ -775,7 +776,7 @@ public class ElasticSearch implements Search {
 	@Override
 	public <P extends ParaObject> List<P> findSimilar(String type, String filterKey, String[] fields,
 			String liketext, Pager... pager) {
-		return findSimilarInternal(Config.getRootAppIdentifier(), type, filterKey, fields, liketext, pager);
+		return findSimilarInternal(Para.getConfig().getRootAppIdentifier(), type, filterKey, fields, liketext, pager);
 	}
 
 	@Override
@@ -786,7 +787,7 @@ public class ElasticSearch implements Search {
 
 	@Override
 	public <P extends ParaObject> List<P> findTagged(String type, String[] tags, Pager... pager) {
-		return findTaggedInternal(Config.getRootAppIdentifier(), type, tags, pager);
+		return findTaggedInternal(Para.getConfig().getRootAppIdentifier(), type, tags, pager);
 	}
 
 	@Override
@@ -796,7 +797,7 @@ public class ElasticSearch implements Search {
 
 	@Override
 	public <P extends ParaObject> List<P> findTags(String keyword, Pager... pager) {
-		return findTagsInternal(Config.getRootAppIdentifier(), keyword, pager);
+		return findTagsInternal(Para.getConfig().getRootAppIdentifier(), keyword, pager);
 	}
 
 	@Override
@@ -807,7 +808,7 @@ public class ElasticSearch implements Search {
 	@Override
 	public <P extends ParaObject> List<P> findTermInList(String type, String field,
 			List<?> terms, Pager... pager) {
-		return findTermInListInternal(Config.getRootAppIdentifier(), type, field, terms, pager);
+		return findTermInListInternal(Para.getConfig().getRootAppIdentifier(), type, field, terms, pager);
 	}
 
 	@Override
@@ -819,7 +820,7 @@ public class ElasticSearch implements Search {
 	@Override
 	public <P extends ParaObject> List<P> findTerms(String type, Map<String, ?> terms,
 			boolean mustMatchBoth, Pager... pager) {
-		return findTermsInternal(Config.getRootAppIdentifier(), type, terms, mustMatchBoth, pager);
+		return findTermsInternal(Para.getConfig().getRootAppIdentifier(), type, terms, mustMatchBoth, pager);
 	}
 
 	@Override
@@ -831,7 +832,7 @@ public class ElasticSearch implements Search {
 	@Override
 	public <P extends ParaObject> List<P> findWildcard(String type, String field, String wildcard,
 			Pager... pager) {
-		return findWildcardInternal(Config.getRootAppIdentifier(), type, field, wildcard, pager);
+		return findWildcardInternal(Para.getConfig().getRootAppIdentifier(), type, field, wildcard, pager);
 	}
 
 	@Override
@@ -842,7 +843,7 @@ public class ElasticSearch implements Search {
 
 	@Override
 	public Long getCount(String type) {
-		return getCountInternal(Config.getRootAppIdentifier(), type);
+		return getCountInternal(Para.getConfig().getRootAppIdentifier(), type);
 	}
 
 	@Override
@@ -852,7 +853,7 @@ public class ElasticSearch implements Search {
 
 	@Override
 	public Long getCount(String type, Map<String, ?> terms) {
-		return getCountInternal(Config.getRootAppIdentifier(), type, terms);
+		return getCountInternal(Para.getConfig().getRootAppIdentifier(), type, terms);
 	}
 
 	@Override

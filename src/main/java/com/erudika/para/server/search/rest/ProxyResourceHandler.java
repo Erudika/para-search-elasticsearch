@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2021 Erudika. http://erudika.com
+ * Copyright 2013-2022 Erudika. http://erudika.com
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,6 @@ import com.erudika.para.core.utils.CoreUtils;
 import com.erudika.para.core.utils.ParaObjectUtils;
 import com.erudika.para.core.persistence.DAO;
 import com.erudika.para.core.rest.CustomResourceHandler;
-import com.erudika.para.core.utils.Config;
 import com.erudika.para.core.utils.Pager;
 import com.erudika.para.server.search.ElasticSearchUtils;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -72,16 +71,16 @@ import org.slf4j.LoggerFactory;
 public class ProxyResourceHandler implements CustomResourceHandler {
 
 	private static final Logger logger = LoggerFactory.getLogger(ProxyResourceHandler.class);
-	private final String esScheme = Config.getConfigParam("es.restclient_scheme", Config.IN_PRODUCTION ? "https" : "http");
-	private final String esHost = Config.getConfigParam("es.restclient_host",
-		Config.getConfigParam("es.transportclient_host", "localhost"));
-	private final int esPort = Config.getConfigInt("es.restclient_port", 9200);
+	private final String esScheme = Para.getConfig().getConfigParam("es.restclient_scheme", Para.getConfig().inProduction() ? "https" : "http");
+	private final String esHost = Para.getConfig().getConfigParam("es.restclient_host",
+		Para.getConfig().getConfigParam("es.transportclient_host", "localhost"));
+	private final int esPort = Para.getConfig().getConfigInt("es.restclient_port", 9200);
 	private RestClient lowLevelClient;
 
 	/**
 	 * Resource path. Defaults to '_elasticsearch'.
 	 */
-	public static final String PATH = Config.getConfigParam("es.proxy_path", "_elasticsearch");
+	public static final String PATH = Para.getConfig().getConfigParam("es.proxy_path", "_elasticsearch");
 
 	@Override
 	public String getRelativePath() {
@@ -114,7 +113,7 @@ public class ProxyResourceHandler implements CustomResourceHandler {
 	}
 
 	Response proxyRequest(String method, ContainerRequestContext ctx) {
-		if (!Config.getConfigBoolean("es.proxy_enabled", false)) {
+		if (!Para.getConfig().getConfigBoolean("es.proxy_enabled", false)) {
 			return Response.status(Response.Status.FORBIDDEN.getStatusCode(), "This feature is disabled.").build();
 		}
 		String appid = ParaObjectUtils.getAppidFromAuthHeader(ctx.getHeaders().getFirst(HttpHeaders.AUTHORIZATION));
@@ -226,7 +225,7 @@ public class ProxyResourceHandler implements CustomResourceHandler {
 	}
 
 	private Response handleReindexTask(String appid, String destinationIndex) {
-		if (!Config.getConfigBoolean("es.proxy_reindexing_enabled", false) || appid == null) {
+		if (!Para.getConfig().getConfigBoolean("es.proxy_reindexing_enabled", false) || appid == null) {
 			return Response.status(Response.Status.FORBIDDEN.getStatusCode(), "This feature is disabled.").build();
 		}
 		Pager pager = new Pager();

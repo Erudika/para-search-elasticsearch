@@ -1,4 +1,4 @@
-FROM adoptopenjdk/openjdk11:ubi-minimal-jre
+FROM adoptopenjdk/openjdk11:alpine-jre
 
 RUN mkdir -p /para/lib
 
