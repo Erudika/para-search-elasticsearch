@@ -11,13 +11,11 @@ git add -A && git commit -m "Release v$ver." && git push origin master && \
 mvn --batch-mode -Dtag=${ver} release:prepare -Dresume=false -Dresume=false -DreleaseVersion=${ver} -DdevelopmentVersion=${devver}-SNAPSHOT && \
 mvn release:perform && \
 echo "Maven release done, publishing release on GitHub..," && \
-echo "v$ver" > changelog.txt && \
-echo "" >> changelog.txt && \
-git log $lastver..HEAD --oneline >> changelog.txt && \
+git log $lastver..HEAD --oneline > changelog.txt && \
 echo "" >> changelog.txt && \
 echo "" >> changelog.txt && \
 echo "### :package: [Download JAR](https://oss.sonatype.org/service/local/repositories/releases/content/com/erudika/para-search-elasticsearch/${ver}/para-search-elasticsearch-${ver}-shaded.jar)" >> changelog.txt && \
-hub release create -F changelog.txt $ver && \
+hub release create -F changelog.txt -t "$ver" $ver && \
 rm changelog.txt
 
 docker build -t erudikaltd/para-search-elasticsearch:${ver} . && docker push erudikaltd/para-search-elasticsearch:${ver}
