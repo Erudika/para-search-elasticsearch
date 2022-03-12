@@ -15,23 +15,26 @@
  *
  * For issues and patches go to: https://github.com/erudika
  */
-package com.erudika.para.server.search;
+package com.erudika.para.server.search.es;
 
+import co.elastic.clients.elasticsearch._types.mapping.Property;
+import co.elastic.clients.elasticsearch._types.query_dsl.QueryBuilders;
 import com.erudika.para.core.App;
 import com.erudika.para.core.ParaObject;
 import com.erudika.para.core.Sysprop;
-import static com.erudika.para.server.search.SearchTest.appid1;
-import static com.erudika.para.server.search.SearchTest.u;
 import com.erudika.para.core.utils.Config;
 import com.erudika.para.core.utils.Pager;
 import com.erudika.para.core.utils.Para;
+import com.erudika.para.server.search.ElasticSearch;
+import static com.erudika.para.server.search.es.SearchTest.appid1;
+import static com.erudika.para.server.search.es.SearchTest.u;
+import com.erudika.para.server.search.es.ESUtils;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import static org.opensearch.index.query.QueryBuilders.matchAllQuery;
 import org.junit.AfterClass;
 import static org.junit.Assert.*;
 import org.junit.BeforeClass;
@@ -55,21 +58,21 @@ public class ElasticSearchIT extends SearchTest {
 		//System.setProperty("para.es.async_enabled", "true");
 		//System.setProperty("para.es.bulk.concurrent_requests", "0");
 		s = new ElasticSearch();
-		ElasticSearchUtils.createIndex(Para.getConfig().getRootAppIdentifier());
-		ElasticSearchUtils.createIndex(appid1);
-		ElasticSearchUtils.createIndex(appid2);
-		ElasticSearchUtils.createIndex(appid3);
+		ESUtils.createIndex(Para.getConfig().getRootAppIdentifier());
+		ESUtils.createIndex(appid1);
+		ESUtils.createIndex(appid2);
+		ESUtils.createIndex(appid3);
 		SearchTest.init();
 	}
 
 	@AfterClass
 	public static void tearDownClass() {
-		ElasticSearchUtils.deleteIndex(Para.getConfig().getRootAppIdentifier());
-		ElasticSearchUtils.deleteIndex(appid1);
-		ElasticSearchUtils.deleteIndex(appid2);
-		ElasticSearchUtils.deleteIndex(appid3);
+		ESUtils.deleteIndex(Para.getConfig().getRootAppIdentifier());
+		ESUtils.deleteIndex(appid1);
+		ESUtils.deleteIndex(appid2);
+		ESUtils.deleteIndex(appid3);
 		SearchTest.cleanup();
-//		ElasticSearchUtils.shutdownClient();
+		ESUtils.shutdownClient();
 	}
 
 	@Test
@@ -77,19 +80,19 @@ public class ElasticSearchIT extends SearchTest {
 		String appid = "test-index";
 		String badAppid = "test index 123";
 
-		ElasticSearchUtils.createIndex("");
-		assertFalse(ElasticSearchUtils.existsIndex(""));
+		ESUtils.createIndex("");
+		assertFalse(ESUtils.existsIndex(""));
 
-		ElasticSearchUtils.createIndex(appid);
-		assertTrue(ElasticSearchUtils.existsIndex(appid));
+		ESUtils.createIndex(appid);
+		assertTrue(ESUtils.existsIndex(appid));
 
-		ElasticSearchUtils.deleteIndex(appid);
-		assertFalse(ElasticSearchUtils.existsIndex(appid));
+		ESUtils.deleteIndex(appid);
+		assertFalse(ESUtils.existsIndex(appid));
 
-		assertFalse(ElasticSearchUtils.createIndex(badAppid));
-		assertFalse(ElasticSearchUtils.existsIndex(badAppid));
-		assertFalse(ElasticSearchUtils.deleteIndex(appid));
-		assertFalse(ElasticSearchUtils.deleteIndex(badAppid));
+		assertFalse(ESUtils.createIndex(badAppid));
+		assertFalse(ESUtils.existsIndex(badAppid));
+		assertFalse(ESUtils.deleteIndex(appid));
+		assertFalse(ESUtils.deleteIndex(badAppid));
 	}
 
 	@Test
@@ -100,10 +103,10 @@ public class ElasticSearchIT extends SearchTest {
 	@Test
 	public void testGetIndexNameForAlias() {
 		String indexWithAlias = "test-index-with-alias";
-		ElasticSearchUtils.createIndex(indexWithAlias);
-		assertEquals("", ElasticSearchUtils.getIndexNameForAlias(""));
-		assertEquals(indexWithAlias + "_1", ElasticSearchUtils.getIndexNameForAlias(indexWithAlias));
-		ElasticSearchUtils.deleteIndex(indexWithAlias);
+		ESUtils.createIndex(indexWithAlias);
+		assertEquals("", ESUtils.getIndexNameForAlias(""));
+		assertEquals(indexWithAlias + "_1", ESUtils.getIndexNameForAlias(indexWithAlias));
+		ESUtils.deleteIndex(indexWithAlias);
 	}
 
 	@Test
@@ -136,8 +139,8 @@ public class ElasticSearchIT extends SearchTest {
 		rootApp.setAppid(root);
 		s.index(root, rootApp);
 
-		assertTrue(ElasticSearchUtils.addIndexAliasWithRouting(root, app1));
-		assertTrue(ElasticSearchUtils.addIndexAliasWithRouting(root, app2));
+		assertTrue(ESUtils.addIndexAliasWithRouting(root, app1));
+		assertTrue(ESUtils.addIndexAliasWithRouting(root, app2));
 
 		Sysprop t1 = new Sysprop("t1");
 		Sysprop t2 = new Sysprop("t2");
@@ -173,25 +176,25 @@ public class ElasticSearchIT extends SearchTest {
 		List<Sysprop> ls2 = s.findQuery(app2, type, "*");
 		assertEquals(ls2.get(0), t2);
 
-		ElasticSearchUtils.deleteByQuery(app2, matchAllQuery());
+		ESUtils.deleteByQuery(app2, QueryBuilders.matchAll().build());
 		assertNull(s.findById(app2, t2.getId()));
 		assertNotNull(s.findById(app1, t1.getId()));
 		assertNotNull(s.findById(app1, t3.getId()));
 
-		ElasticSearchUtils.deleteByQuery(app1, matchAllQuery());
+		ESUtils.deleteByQuery(app1, QueryBuilders.matchAll().build());
 		assertNull(s.findById(app1, t1.getId()));
 		assertNull(s.findById(app1, t3.getId()));
 
 //		s.unindexAll(Arrays.asList(t1, t2, t3));
-		ElasticSearchUtils.removeIndexAlias(root, app1);
-		ElasticSearchUtils.removeIndexAlias(root, app2);
+		ESUtils.removeIndexAlias(root, app1);
+		ESUtils.removeIndexAlias(root, app2);
 	}
 
 	@Test
 	public void testNestedIndexing() {
 		System.setProperty("para.es.use_nested_custom_fields", "true");
 		String indexInNestedMode = "app-nested-mode";
-		ElasticSearchUtils.createIndex(indexInNestedMode);
+		ESUtils.createIndex(indexInNestedMode);
 		String type = "cat";
 		Sysprop c1 = new Sysprop("c1");
 		Sysprop c2 = new Sysprop("c2");
@@ -354,18 +357,18 @@ public class ElasticSearchIT extends SearchTest {
 		assertEquals("c3", rs2.get(2).getId());
 
 		s.unindexAll(indexInNestedMode, Arrays.asList(c1, c2, c3));
-		ElasticSearchUtils.deleteIndex(indexInNestedMode);
+		ESUtils.deleteIndex(indexInNestedMode);
 		System.setProperty("para.es.use_nested_custom_fields", "false");
 	}
 
 	@Test
 	public void testNestedMapping() {
 		System.setProperty("para.es.use_nested_custom_fields", "true");
-		String n = ElasticSearchUtils.getDefaultMapping();
-		assertTrue(n.contains("\"properties\": {\"type\": \"nested\"},"));
+		Property p = ESUtils.getDefaultMapping().get("properties");
+		assertTrue(p != null && p.nested().enabled());
 
 		System.setProperty("para.es.use_nested_custom_fields", "false");
-		n = ElasticSearchUtils.getDefaultMapping();
-		assertTrue(n.contains("\"properties\": {\"type\": \"object\"},"));
+		p = ESUtils.getDefaultMapping().get("properties");
+		assertTrue(p != null && p.object().enabled());
 	}
 }

@@ -17,13 +17,13 @@
  */
 package com.erudika.para.server.rest;
 
-import com.erudika.para.server.search.rest.ProxyResourceHandler;
-import com.erudika.para.server.search.rest.ProxySubResourceHandler;
-import com.erudika.para.core.utils.ParaObjectUtils;
 import com.erudika.para.core.rest.GenericExceptionMapper;
-import static com.erudika.para.server.search.rest.ProxyResourceHandler.PATH;
+import com.erudika.para.core.utils.ParaObjectUtils;
 import com.erudika.para.core.utils.Utils;
-import com.erudika.para.server.search.ElasticSearchUtils;
+import com.erudika.para.server.search.es.ESUtils;
+import com.erudika.para.server.search.rest.ProxyResourceHandler;
+import static com.erudika.para.server.search.rest.ProxyResourceHandler.PATH;
+import com.erudika.para.server.search.rest.ProxySubResourceHandler;
 import com.fasterxml.jackson.jaxrs.json.JacksonJsonProvider;
 import java.util.Collections;
 import java.util.Map;
@@ -72,12 +72,12 @@ public class ProxyResourceHandlerIT extends JerseyTest {
 		System.setProperty("para.cluster_name", "test");
 		System.setProperty("para.es.proxy_enabled", "true");
 		System.setProperty("para.es.shards", "2");
-		ElasticSearchUtils.createIndex("myapp");
+		ESUtils.createIndex("myapp");
 	}
 
 	@AfterClass
 	public static void tearDownClass() {
-		ElasticSearchUtils.deleteIndex("myapp");
+		ESUtils.deleteIndex("myapp");
 	}
 
 	@Override
@@ -131,7 +131,7 @@ public class ProxyResourceHandlerIT extends JerseyTest {
 		Response ok1 = target(PATH + "/_search").request(JSON).headers(headers).get();
 		assertEquals(OK.getStatusCode(), ok1.getStatus());
 		// path is URL-encoded
-		Response ok3 = target(PATH + "/" + Utils.urlEncode("cat/_count?q=*")).request(JSON).headers(headers).get();
+		Response ok3 = target(PATH + "/" + Utils.urlEncode("/_count?q=*")).request(JSON).headers(headers).get();
 		assertEquals(OK.getStatusCode(), ok3.getStatus());
 		assertTrue(ok3.readEntity(Map.class).containsKey("count"));
 	}

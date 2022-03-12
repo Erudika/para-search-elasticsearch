@@ -15,7 +15,7 @@
  *
  * For issues and patches go to: https://github.com/erudika
  */
-package com.erudika.para.server.search;
+package com.erudika.para.server.search.es;
 
 import com.erudika.para.core.Address;
 import com.erudika.para.core.App;

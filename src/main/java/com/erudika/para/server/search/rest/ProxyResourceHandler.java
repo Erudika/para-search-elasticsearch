@@ -25,8 +25,8 @@ import com.erudika.para.core.utils.CoreUtils;
 import com.erudika.para.core.utils.ParaObjectUtils;
 import com.erudika.para.core.persistence.DAO;
 import com.erudika.para.core.rest.CustomResourceHandler;
+import com.erudika.para.core.search.Search;
 import com.erudika.para.core.utils.Pager;
-import com.erudika.para.server.search.ElasticSearchUtils;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.io.IOException;
 import java.io.InputStream;
@@ -230,10 +230,11 @@ public class ProxyResourceHandler implements CustomResourceHandler {
 		}
 		Pager pager = new Pager();
 		DAO dao = CoreUtils.getInstance().getDao();
+		Search search = CoreUtils.getInstance().getSearch();
 		App app = dao.read(App.id(appid));
 		if (app != null) {
 			long startTime = System.nanoTime();
-			ElasticSearchUtils.rebuildIndex(dao, app, destinationIndex, pager);
+			search.rebuildIndex(dao, app, destinationIndex, pager);
 			long tookMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startTime);
 			Map<String, Object> response = new HashMap<String, Object>();
 			response.put("reindexed", pager.getCount());

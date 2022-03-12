@@ -53,7 +53,7 @@
 		<skipTests>false</skipTests>
 		<skipITs>${skipTests}</skipITs>
 		<skipUTs>${skipTests}</skipUTs>
-		<elasticsearch.version>7.15.2</elasticsearch.version>
+		<elasticsearch.version>8.1.0</elasticsearch.version>
 		<jerseyVer>2.35</jerseyVer>
 	</properties>
 
@@ -61,7 +61,7 @@
 		<dependency>
 			<groupId>com.erudika</groupId>
 			<artifactId>para-core</artifactId>
-			<version>1.44.0</version>
+			<version>1.45.1</version>
 			<scope>provided</scope>
 		</dependency>
 		<dependency>
@@ -92,12 +92,17 @@
 			<artifactId>opensearch-rest-high-level-client</artifactId>
 			<version>1.2.4</version>
 		</dependency>
+		<dependency>
+			<groupId>co.elastic.clients</groupId>
+			<artifactId>elasticsearch-java</artifactId>
+			<version>${elasticsearch.version}</version>
+		</dependency>
 
 		<!-- LOGGING -->
 		<dependency>
 			<groupId>org.apache.logging.log4j</groupId>
 			<artifactId>log4j-to-slf4j</artifactId>
-			<version>2.17.1</version>
+			<version>2.17.2</version>
 		</dependency>
 
 		<!-- TESTING -->
@@ -125,6 +130,16 @@
 			<version>${jerseyVer}</version>
 			<scope>test</scope>
 		</dependency>
+		<dependency>
+			<groupId>commons-codec</groupId>
+			<artifactId>commons-codec</artifactId>
+			<version>1.15</version>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.httpcomponents</groupId>
+			<artifactId>httpcore</artifactId>
+			<version>4.4.13</version>
+		</dependency>
 	</dependencies>
 
 	<build>
@@ -132,21 +147,21 @@
 			<plugin>
 				<groupId>com.github.alexcojocaru</groupId>
 				<artifactId>elasticsearch-maven-plugin</artifactId>
-				<version>6.19</version>
+				<version>6.22</version>
 				<configuration>
 					<skip>${skipITs}</skip>
 					<!--<autoCreateIndex>false</autoCreateIndex>-->
 					<version>${elasticsearch.version}</version>
 					<flavour>default</flavour>
 					<clusterName>test</clusterName>
-					<tcpPort>9300</tcpPort>
+					<transportPort>9300</transportPort>
 					<httpPort>9200</httpPort>
 					<logLevel>ERROR</logLevel>
 					<timeout>240</timeout>
 					<instanceCount>1</instanceCount>
 					<instanceSettings>
 						<properties>
-							<xpack.security.enabled>false</xpack.security.enabled>
+							<!--<xpack.security.enabled>false</xpack.security.enabled>-->
 						</properties>
 					</instanceSettings>
 				</configuration>
@@ -291,9 +306,9 @@
 			</plugin>
 
 			<plugin>
-				<groupId>org.codehaus.mojo</groupId>
+				<groupId>org.sonarsource.scanner.maven</groupId>
 				<artifactId>sonar-maven-plugin</artifactId>
-				<version>3.6.0.1398</version>
+				<version>3.9.1.2184</version>
 			</plugin>
 
 			<plugin>

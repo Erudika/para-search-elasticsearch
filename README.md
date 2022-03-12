@@ -17,12 +17,28 @@ This plugin allows you to use Elasticsearch as the search engine for Para.
 
 ## Features
 
-- Implements the Para `Search` interface using the high level REST client (HLRC)
+- Implements the Para `Search` interface using the official Elasticsearch Java client
+- Supports both Elasticsearch and OpenSearch servers
 - Index sharing and multitenancy support through alias routing and filtering
 - Supports both asynchronous and synchronous document operations
 - Full pagination support for both "search-after" and "from-size" modes
 - Proxy endpoint `/v1/_elasticsearch` - relays all requests directly to Elasticsearch (disabled by default)
 - Supports AWS Elasticsearch Service with request signing
+
+## Compatibility
+
+ES Plugin version | Elasticsearch support | OpenSearch support
+--- | --- | ---
+`1.40.0` and above  | `7.10.x` and above **(with config flag)**  | `1.0.0` and above **(with config flag)**
+`1.39.0` and below  | up to `7.15.2` | `1.0.0` and above
+
+After version `1.40.0` a configuration flag is required to destinguish between the two different flavors of Eleasticsearch:
+```ini
+para.es.flavor = "elasticsearch"
+# ==== OR ==== #
+para.es.flavor = "openSearch"
+```
+The default option here is `elasticsearch`.
 
 ## Documentation
 
@@ -46,6 +62,9 @@ WAR file `para-x.y.z.war`. Para will look for plugins inside `lib` and pick up t
 
 Here are all the configuration properties for this plugin (these go inside your `application.conf`):
 ```ini
+# ES flavor - elasticsearch or opensearch
+para.es.flavor = "elasticsearch"
+
 # enable this to bypass the DB and read all data straight from ES
 para.read_from_index = false
 para.es.shards = 5
