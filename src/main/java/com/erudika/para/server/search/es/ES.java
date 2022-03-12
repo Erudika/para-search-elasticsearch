@@ -444,7 +444,7 @@ public final class ES {
 	 * @param appid name of the {@link com.erudika.para.core.App}
 	 * @param type type of object
 	 * @param query the search query builder
-	 * @param pager a {@link com.erudika.para.utils.Pager}
+	 * @param pager a {@link com.erudika.para.core.utils.Pager}
 	 * @return a list of search results
 	 */
 	protected static SearchResponse<Map> searchQueryRaw(String appid, String type, QueryVariant query, Pager... pager) {
