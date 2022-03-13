@@ -48,7 +48,6 @@ import org.slf4j.LoggerFactory;
 public class ElasticSearch implements Search {
 
 	private static final Logger logger = LoggerFactory.getLogger(ElasticSearch.class);
-	private DAO dao;
 
 	/**
 	 * Switch between OpenSearch and Elasticsearch flavors.
@@ -59,11 +58,6 @@ public class ElasticSearch implements Search {
 	static {
 		if (Para.getConfig().isSearchEnabled() && Para.getConfig().getConfigParam("search", "").
 				equalsIgnoreCase(ElasticSearch.class.getSimpleName())) {
-			if (OPEN_SEARCH_FLAVOR) {
-				OSUtils.getRESTClient();
-			} else {
-				ESUtils.getRESTClient();
-			}
 			// set up automatic index creation and deletion
 			App.addAppCreatedListener((App app) -> createIndexInternal(app));
 			App.addAppDeletedListener((App app) -> deleteIndexInternal(app));
@@ -83,7 +77,8 @@ public class ElasticSearch implements Search {
 	 */
 	@Inject
 	public ElasticSearch(DAO dao) {
-		this.dao = dao;
+		ES.setDao(dao);
+		OS.setDao(dao);
 	}
 
 	@Override

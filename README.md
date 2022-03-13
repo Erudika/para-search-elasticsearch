@@ -29,14 +29,14 @@ This plugin allows you to use Elasticsearch as the search engine for Para.
 
 ES Plugin version | Elasticsearch support | OpenSearch support
 --- | --- | ---
-`1.40.0` and above  | `7.10.x` and above **(with config flag)**  | `1.0.0` and above **(with config flag)**
+`1.40.0` and above  | `8.x` and above **(with config flag)**  | `1.0.0` and above **(with config flag)**
 `1.39.0` and below  | up to `7.15.2` | `1.0.0` and above
 
 After version `1.40.0` a configuration flag is required to destinguish between the two different flavors of Eleasticsearch:
 ```ini
 para.es.flavor = "elasticsearch"
 # ==== OR ==== #
-para.es.flavor = "openSearch"
+para.es.flavor = "opensearch"
 ```
 The default option here is `elasticsearch`.
 

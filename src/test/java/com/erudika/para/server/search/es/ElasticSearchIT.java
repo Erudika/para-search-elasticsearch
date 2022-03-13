@@ -28,7 +28,6 @@ import com.erudika.para.core.utils.Para;
 import com.erudika.para.server.search.ElasticSearch;
 import static com.erudika.para.server.search.es.SearchTest.appid1;
 import static com.erudika.para.server.search.es.SearchTest.u;
-import com.erudika.para.server.search.es.ESUtils;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
