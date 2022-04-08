@@ -138,21 +138,21 @@ public final class ESUtils {
 	 * containing custom properties. This mode prevents an eventual field mapping explosion.
 	 */
 	static boolean nestedMode() {
-		return Para.getConfig().getConfigBoolean("es.use_nested_custom_fields", false);
+		return Para.getConfig().elasticsearchNestedModeEnabled();
 	}
 
 	/**
 	 * @return true if asynchronous indexing/unindexing is enabled.
 	 */
 	static boolean asyncEnabled() {
-		return Para.getConfig().getConfigBoolean("es.async_enabled", false);
+		return Para.getConfig().elasticsearchAsyncModeEnabled();
 	}
 
 	/**
 	 * @return true if we want the bulk processor to flush immediately after each bulk request.
 	 */
 	static boolean flushImmediately() {
-		return Para.getConfig().getConfigBoolean("es.bulk.flush_immediately", true);
+		return Para.getConfig().elasticsearchBulkFlushEnabled();
 	}
 
 	/**
@@ -215,15 +215,15 @@ public final class ESUtils {
 		if (restClient != null) {
 			return restClient;
 		}
-		String esScheme = Para.getConfig().getConfigParam("es.restclient_scheme", Para.getConfig().inProduction() ? "https" : "http");
-		String esHost = Para.getConfig().getConfigParam("es.restclient_host", "localhost");
-		int esPort = Para.getConfig().getConfigInt("es.restclient_port", 9200);
-		boolean signRequests = Para.getConfig().getConfigBoolean("es.sign_requests_to_aws", esHost.contains("amazonaws.com"));
+		String esScheme = Para.getConfig().elasticsearchRestClientScheme();
+		String esHost = Para.getConfig().elasticsearchRestClientHost();
+		int esPort = Para.getConfig().elasticsearchRestClientPort();
+		boolean signRequests = Para.getConfig().elasticsearchSignRequestsForAwsEnabled();
 
 		HttpHost host = new HttpHost(esHost, esPort, esScheme);
 		RestClientBuilder clientBuilder = RestClient.builder(host);
 
-		String esPrefix = Para.getConfig().getConfigParam("es.restclient_context_path", "");
+		String esPrefix = Para.getConfig().elasticsearchRestClientContextPath();
 		if (StringUtils.isNotEmpty(esPrefix)) {
 			clientBuilder.setPathPrefix(esPrefix);
 		}
@@ -238,6 +238,11 @@ public final class ESUtils {
 		// register all customizations
 		clientBuilder.setHttpClientConfigCallback(httpClientBuilder -> {
 			configurationCallbacks.forEach(c -> c.customizeHttpClient(httpClientBuilder));
+			if (esHost.startsWith("localhost") || !Para.getConfig().inProduction()) {
+				httpClientBuilder.setSSLHostnameVerifier((hostname, session) -> true);
+//				httpClientBuilder.setSSLContext(SSLContextBuilder.create().);
+
+			}
 			return httpClientBuilder;
 		});
 
@@ -284,17 +289,17 @@ public final class ESUtils {
 		}
 		try {
 			if (shards <= 0) {
-				shards = Para.getConfig().getConfigInt("es.shards", 2);
+				shards = Para.getConfig().elasticsearchRootIndexShards();
 			}
 			if (replicas < 0) {
-				replicas = Para.getConfig().getConfigInt("es.replicas", 0);
+				replicas = Para.getConfig().elasticsearchRootIndexReplicas();
 			}
 			final int numShards = shards;
 			final int numReplicas = replicas;
 			IndexSettings settings = IndexSettings.of(b -> {
 				b.numberOfShards(Integer.toString(numShards));
 				b.numberOfReplicas(Integer.toString(numReplicas));
-				b.autoExpandReplicas(Para.getConfig().getConfigParam("es.auto_expand_replicas", "0-1"));
+				b.autoExpandReplicas(Para.getConfig().elasticsearchAutoExpandReplicas());
 				return b;
 			});
 			// create index with default system mappings; ES allows only one type per index
@@ -314,7 +319,7 @@ public final class ESUtils {
 	 * @return true if created
 	 */
 	public static boolean createIndex(String appid) {
-		return createIndex(appid, Para.getConfig().getConfigInt("es.shards", 2), Para.getConfig().getConfigInt("es.replicas", 0));
+		return createIndex(appid, Para.getConfig().elasticsearchRootIndexShards(), Para.getConfig().elasticsearchRootIndexReplicas());
 	}
 
 	/**
@@ -331,7 +336,7 @@ public final class ESUtils {
 		String indexName = appid.trim() + "_1";
 		boolean created = createIndexWithoutAlias(indexName, shards, replicas);
 		if (created) {
-			boolean withAliasRouting = App.isRoot(appid) && Para.getConfig().getConfigBoolean("es.root_index_sharing_enabled", false);
+			boolean withAliasRouting = App.isRoot(appid) && Para.getConfig().elasticsearchRootIndexSharingEnabled();
 			boolean aliased = addIndexAlias(indexName, appid, withAliasRouting);
 			if (!aliased) {
 				logger.info("Created ES index '{}' without an alias '{}'.", indexName, appid);
@@ -425,7 +430,7 @@ public final class ESUtils {
 
 			List<BulkOperation> batch = new LinkedList<>();
 			Pager p = getPager(pager);
-			int batchSize = Para.getConfig().getConfigInt("reindex_batch_size", p.getLimit());
+			int batchSize = Para.getConfig().reindexBatchSize(p.getLimit());
 			long reindexedCount = 0;
 			List<ParaObject> list;
 			final String newIndex = newName;
@@ -507,7 +512,7 @@ public final class ESUtils {
 	 * @return number of unindexed documents.
 	 */
 	public static long deleteByQuery(String appid, QueryVariant fb, Consumer<DeleteByQueryResponse> cb) {
-		int batchSize = Para.getConfig().getConfigInt("unindex_batch_size", 1000);
+		int batchSize = 1000;
 		boolean isSharingIndex = !App.isRoot(appid) && StringUtils.startsWith(appid, " ");
 		String indexName = getIndexName(appid);
 		DeleteByQueryRequest.Builder deleteByQueryReq = new DeleteByQueryRequest.Builder();
@@ -758,7 +763,7 @@ public final class ESUtils {
 					if (b.errors()) {
 						b.items().stream().filter(i -> i.status() != 200).forEach(item -> {
 							//FUTURE: Increment counter metric for failed document indexing
-							logger.error("Failed to execute async {} operation for index '{}', document id '{}': ",
+							logger.error("Failed to execute async {} operation for index '{}', document id '{}': {}",
 									item.operationType(), item.index(), item.id(), item.error().reason());
 						});
 					}
@@ -769,7 +774,7 @@ public final class ESUtils {
 				if (res.errors()) {
 					res.items().stream().filter(i -> i.status() != 200).forEach(item -> {
 						//FUTURE: Increment counter metric for failed document indexing
-						logger.error("Failed to execute sync {} operation for index '{}', document id '{}': ",
+						logger.error("Failed to execute sync {} operation for index '{}', document id '{}': {}",
 								item.operationType(), item.index(), item.id(), item.error().reason());
 					});
 					handleFailedRequests();
@@ -781,7 +786,7 @@ public final class ESUtils {
 	}
 
 	private static void handleFailedRequests() {
-		if (Para.getConfig().getConfigBoolean("es.fail_on_indexing_errors", false)) {
+		if (Para.getConfig().exceptionOnWriteErrorsEnabled()) {
 			throw new RuntimeException("Synchronous indexing operation failed!");
 		}
 	}
@@ -934,7 +939,7 @@ public final class ESUtils {
 	}
 
 	static TrackHits getTrackTotalHits() {
-		String trackTotalHits = Para.getConfig().getConfigParam("es.track_total_hits", "true");
+		String trackTotalHits = Para.getConfig().elasticsearchTrackTotalHits();
 		return TrackHits.of(t -> {
 			if (NumberUtils.isDigits(trackTotalHits)) {
 				return t.count(NumberUtils.toInt(trackTotalHits, Config.DEFAULT_LIMIT));
@@ -1350,7 +1355,7 @@ public final class ESUtils {
 						awsCredentials(creds).
 						doubleUrlEncode(true).
 						signingName("es").
-						signingRegion(Region.of(Para.getConfig().getConfigParam("es.aws_region", "eu-west-1")));
+						signingRegion(Region.of(Para.getConfig().elasticsearchAwsRegion()));
 				URIBuilder uriBuilder;
 				String httpMethod = request.getRequestLine().getMethod();
 				String resourcePath;
@@ -1411,8 +1416,8 @@ public final class ESUtils {
 	}
 
 	static RestClientBuilder.HttpClientConfigCallback getAuthenticationCallback() {
-		final String basicAuthLogin = Para.getConfig().getConfigParam("es.basic_auth_login", "");
-		final String basicAuthPassword = Para.getConfig().getConfigParam("es.basic_auth_password", "");
+		final String basicAuthLogin = Para.getConfig().elasticsearchAuthUser();
+		final String basicAuthPassword = Para.getConfig().elasticsearchAuthPassword();
 
 		if (StringUtils.isAnyEmpty(basicAuthLogin, basicAuthPassword)) {
 			// no authentication
@@ -1422,7 +1427,8 @@ public final class ESUtils {
 			final CredentialsProvider credentialsProvider = new BasicCredentialsProvider();
 			credentialsProvider.setCredentials(AuthScope.ANY,
 					new UsernamePasswordCredentials(basicAuthLogin, basicAuthPassword));
-			return (HttpAsyncClientBuilder httpClientBuilder) -> httpClientBuilder.setDefaultCredentialsProvider(credentialsProvider);
+			return (HttpAsyncClientBuilder httpClientBuilder) -> httpClientBuilder.
+					setDefaultCredentialsProvider(credentialsProvider);
 		}
 	}
 }

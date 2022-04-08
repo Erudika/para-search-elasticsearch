@@ -52,11 +52,11 @@ public class ElasticSearch implements Search {
 	/**
 	 * Switch between OpenSearch and Elasticsearch flavors.
 	 */
-	public static final boolean OPEN_SEARCH_FLAVOR = "opensearch".equalsIgnoreCase(Para.getConfig().
-			getConfigParam("es.flavor", "elasticsearch"));
+	public static final boolean OPEN_SEARCH_FLAVOR = "opensearch".
+			equalsIgnoreCase(Para.getConfig().elasticsearchFlavor());
 
 	static {
-		if (Para.getConfig().isSearchEnabled() && Para.getConfig().getConfigParam("search", "").
+		if (Para.getConfig().isSearchEnabled() && Para.getConfig().searchPlugin().
 				equalsIgnoreCase(ElasticSearch.class.getSimpleName())) {
 			// set up automatic index creation and deletion
 			App.addAppCreatedListener((App app) -> createIndexInternal(app));
@@ -123,10 +123,10 @@ public class ElasticSearch implements Search {
 					ESUtils.addIndexAliasWithRouting(Para.getConfig().getRootAppIdentifier(), appid);
 				}
 			} else {
-				int shards = app.isRootApp() ? Para.getConfig().getConfigInt("es.shards", 2)
-						: Para.getConfig().getConfigInt("es.shards_for_child_apps", 1);
-				int replicas = app.isRootApp() ? Para.getConfig().getConfigInt("es.replicas", 0)
-						: Para.getConfig().getConfigInt("es.replicas_for_child_apps", 0);
+				int shards = app.isRootApp() ? Para.getConfig().elasticsearchRootIndexShards()
+						: Para.getConfig().elasticsearchChildIndexShards();
+				int replicas = app.isRootApp() ? Para.getConfig().elasticsearchRootIndexReplicas()
+						: Para.getConfig().elasticsearchChildIndexReplicas();
 				if (OPEN_SEARCH_FLAVOR) {
 					OSUtils.createIndex(appid, shards, replicas);
 				} else {

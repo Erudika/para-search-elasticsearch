@@ -108,6 +108,21 @@ para.search = "ElasticSearch"
 This could be a Java system property or part of a `application.conf` file on the classpath.
 This tells Para to use the Elasticsearch implementation instead of the default (Lucene).
 
+### SSL connection with Elasticsearch
+
+Newer versions of ES are using HTTPS by default and generate a unique SSL certificate on first startup.
+To have a successful connection, you should first add the generated CA of the ES server to your Java keystore,
+indicating that you trust that certificate. This is the console command to do that:
+
+```sh
+echo -n | \
+openssl s_client -connect localhost:9200 | \
+sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' > ./ca_elasticsearch.cer && \
+keytool -import -alias saelk -file ca_elasticsearch.cer -keystore ${JAVA_HOME}/lib/security/cacerts -storepass changeit
+```
+
+Finally, set `para.es.restclient_scheme = "https"`.
+
 ### Synchronous versus Asynchronous Indexing
 The Elasticsearch plugin supports both synchronous (default) and asynchronous indexing modes.
 For synchronous indexing, the Elasticsearch plugin will make a single, blocking request through the client

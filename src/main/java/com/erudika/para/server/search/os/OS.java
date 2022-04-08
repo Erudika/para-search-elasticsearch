@@ -379,8 +379,8 @@ public final class OS {
 		}
 		List<P> results = new ArrayList<P>(hits.getHits().length);
 		List<String> keys = new LinkedList<String>();
-		boolean readFromIndex = Para.getConfig().getConfigBoolean("read_from_index", false);
-		boolean cleanupIndex = Para.getConfig().getConfigBoolean("sync_index_with_db", true);
+		boolean readFromIndex = Para.getConfig().readFromIndexEnabled();
+		boolean cleanupIndex = Para.getConfig().syncIndexWithDatabaseEnabled();
 		try {
 			for (SearchHit hit : hits) {
 				if (readFromIndex) {

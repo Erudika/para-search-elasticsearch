@@ -17,16 +17,16 @@
  */
 package com.erudika.para.server.search.rest;
 
-import com.erudika.para.core.listeners.DestroyListener;
-import com.erudika.para.core.utils.Para;
 import com.erudika.para.core.App;
 import com.erudika.para.core.ParaObject;
-import com.erudika.para.core.utils.CoreUtils;
-import com.erudika.para.core.utils.ParaObjectUtils;
+import com.erudika.para.core.listeners.DestroyListener;
 import com.erudika.para.core.persistence.DAO;
 import com.erudika.para.core.rest.CustomResourceHandler;
 import com.erudika.para.core.search.Search;
+import com.erudika.para.core.utils.CoreUtils;
 import com.erudika.para.core.utils.Pager;
+import com.erudika.para.core.utils.Para;
+import com.erudika.para.core.utils.ParaObjectUtils;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.io.IOException;
 import java.io.InputStream;
@@ -71,16 +71,12 @@ import org.slf4j.LoggerFactory;
 public class ProxyResourceHandler implements CustomResourceHandler {
 
 	private static final Logger logger = LoggerFactory.getLogger(ProxyResourceHandler.class);
-	private final String esScheme = Para.getConfig().getConfigParam("es.restclient_scheme", Para.getConfig().inProduction() ? "https" : "http");
-	private final String esHost = Para.getConfig().getConfigParam("es.restclient_host",
-		Para.getConfig().getConfigParam("es.transportclient_host", "localhost"));
-	private final int esPort = Para.getConfig().getConfigInt("es.restclient_port", 9200);
 	private RestClient lowLevelClient;
 
 	/**
 	 * Resource path. Defaults to '_elasticsearch'.
 	 */
-	public static final String PATH = Para.getConfig().getConfigParam("es.proxy_path", "_elasticsearch");
+	public static final String PATH = Para.getConfig().elasticsearchProxyPath();
 
 	@Override
 	public String getRelativePath() {
@@ -113,7 +109,7 @@ public class ProxyResourceHandler implements CustomResourceHandler {
 	}
 
 	Response proxyRequest(String method, ContainerRequestContext ctx) {
-		if (!Para.getConfig().getConfigBoolean("es.proxy_enabled", false)) {
+		if (!Para.getConfig().elasticsearchProxyEnabled()) {
 			return Response.status(Response.Status.FORBIDDEN.getStatusCode(), "This feature is disabled.").build();
 		}
 		String appid = ParaObjectUtils.getAppidFromAuthHeader(ctx.getHeaders().getFirst(HttpHeaders.AUTHORIZATION));
@@ -160,6 +156,9 @@ public class ProxyResourceHandler implements CustomResourceHandler {
 			return lowLevelClient;
 		}
 		try {
+			String esScheme = Para.getConfig().elasticsearchRestClientScheme();
+			String esHost = Para.getConfig().elasticsearchRestClientHost();
+			int esPort = Para.getConfig().elasticsearchRestClientPort();
 			lowLevelClient = RestClient.builder(new HttpHost(esHost, esPort, esScheme)).build();
 			Para.addDestroyListener(new DestroyListener() {
 				public void onDestroy() {
@@ -225,7 +224,7 @@ public class ProxyResourceHandler implements CustomResourceHandler {
 	}
 
 	private Response handleReindexTask(String appid, String destinationIndex) {
-		if (!Para.getConfig().getConfigBoolean("es.proxy_reindexing_enabled", false) || appid == null) {
+		if (!Para.getConfig().elasticsearchProxyReindexingEnabled() || appid == null) {
 			return Response.status(Response.Status.FORBIDDEN.getStatusCode(), "This feature is disabled.").build();
 		}
 		Pager pager = new Pager();
