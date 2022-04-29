@@ -99,8 +99,8 @@ public final class ES {
 		try {
 			executeRequests(objects.stream().
 					filter(Objects::nonNull).
-					map(obj -> BulkOperation.of(b -> b.create(d -> d.index(getIndexName(appid)).id(obj.getId()).
-							document(ESUtils.getSourceFromParaObject(obj))))).
+					map(obj -> BulkOperation.of(b -> b.update(d -> d.index(getIndexName(appid)).id(obj.getId()).
+							action(a -> a.doc(ESUtils.getSourceFromParaObject(obj)).docAsUpsert(true))))).
 					collect(Collectors.toList()));
 			logger.debug("Search.indexAll() {}", objects.size());
 		} catch (Exception e) {

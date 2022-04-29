@@ -370,4 +370,22 @@ public class ElasticSearchIT extends SearchTest {
 		p = ESUtils.getDefaultMapping().get("properties");
 		assertTrue(p != null && p.object().enabled());
 	}
+
+	@Test
+	public void testVersionConflict() {
+		Sysprop t1 = new Sysprop("vc1");
+		t1.setType("test");
+		t1.setAppid(appid1);
+		t1.setTimestamp(System.currentTimeMillis());
+		t1.setName("v1");
+		s.index(t1.getAppid(), t1);
+		assertEquals("v1", s.findById(appid1, t1.getId()).getName());
+		t1.setName("v2");
+		s.index(t1.getAppid(), t1);
+		try {
+			Thread.sleep(1000);
+		} catch (InterruptedException ex) { }
+		assertEquals("v2", s.findById(appid1, t1.getId()).getName());
+		s.unindex(t1);
+	}
 }
