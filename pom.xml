@@ -61,7 +61,7 @@
 		<dependency>
 			<groupId>com.erudika</groupId>
 			<artifactId>para-core</artifactId>
-			<version>1.45.8</version>
+			<version>1.45.9</version>
 			<scope>provided</scope>
 		</dependency>
 		<dependency>
@@ -197,7 +197,7 @@
 							<minimizeJar>false</minimizeJar>
 							<shadedArtifactAttached>true</shadedArtifactAttached>
 							<transformers>
-								<transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer" />
+								<transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
 							</transformers>
 							<filters>
 								<filter>
