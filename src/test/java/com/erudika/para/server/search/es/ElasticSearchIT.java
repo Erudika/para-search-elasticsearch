@@ -48,7 +48,7 @@ public class ElasticSearchIT extends SearchTest {
 	@BeforeClass
 	public static void setUpClass() {
 		System.setProperty("para.env", "embedded");
-		System.setProperty("read_from_index", "true");
+		System.setProperty("para.read_from_index", "true");
 		System.setProperty("para.app_name", "para-test");
 		System.setProperty("para.cluster_name", "test");
 		System.setProperty("para.es.shards", "2");
