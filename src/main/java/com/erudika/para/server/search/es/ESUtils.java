@@ -1080,7 +1080,7 @@ public final class ESUtils {
 		try {
 			return rewriteQuery(q, 0);
 		} catch (Exception e) {
-			logger.warn(e.getMessage());
+			logger.warn(e.getMessage() + " - query: " + StringUtils.abbreviate(query, 500));
 			return null;
 		}
 	}
