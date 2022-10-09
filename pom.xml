@@ -53,8 +53,8 @@
 		<skipTests>false</skipTests>
 		<skipITs>${skipTests}</skipITs>
 		<skipUTs>${skipTests}</skipUTs>
-		<elasticsearch.version>8.4.1</elasticsearch.version>
-		<jerseyVer>2.36</jerseyVer>
+		<elasticsearch.version>8.4.2</elasticsearch.version>
+		<jerseyVer>2.37</jerseyVer>
 	</properties>
 
 	<dependencies>
@@ -102,7 +102,7 @@
 		<dependency>
 			<groupId>org.apache.logging.log4j</groupId>
 			<artifactId>log4j-to-slf4j</artifactId>
-			<version>2.18.0</version>
+			<version>2.19.0</version>
 		</dependency>
 
 		<!-- TESTING -->
