@@ -520,7 +520,7 @@ public final class ESUtils {
 		deleteByQueryReq.conflicts(Conflicts.Proceed);
 		deleteByQueryReq.query(fb._toQuery());
 //		deleteByQueryReq.BatchSize(batchSize);
-		deleteByQueryReq.slices(1L); // parallelize operation?
+		deleteByQueryReq.slices(s -> s.value(1)); // parallelize operation?
 		deleteByQueryReq.scroll(Time.of(t -> t.time("10m")));
 		deleteByQueryReq.refresh(true);
 		if (isSharingIndex) {
