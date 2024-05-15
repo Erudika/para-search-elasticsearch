@@ -34,10 +34,14 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.junit.AfterClass;
-import static org.junit.Assert.*;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterAll;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 
 /**
  *
@@ -45,7 +49,7 @@ import org.junit.Test;
  */
 public class ElasticSearchIT extends SearchTest {
 
-	@BeforeClass
+	@BeforeAll
 	public static void setUpClass() {
 		System.setProperty("para.env", "embedded");
 		System.setProperty("para.read_from_index", "true");
@@ -64,7 +68,7 @@ public class ElasticSearchIT extends SearchTest {
 		SearchTest.init();
 	}
 
-	@AfterClass
+	@AfterAll
 	public static void tearDownClass() {
 		ESUtils.deleteIndex(Para.getConfig().getRootAppIdentifier());
 		ESUtils.deleteIndex(appid1);

@@ -24,36 +24,36 @@ import com.erudika.para.server.search.es.ESUtils;
 import com.erudika.para.server.search.rest.ProxyResourceHandler;
 import static com.erudika.para.server.search.rest.ProxyResourceHandler.PATH;
 import com.erudika.para.server.search.rest.ProxySubResourceHandler;
-import com.fasterxml.jackson.jaxrs.json.JacksonJsonProvider;
+import com.fasterxml.jackson.jakarta.rs.json.JacksonJsonProvider;
+import static jakarta.ws.rs.HttpMethod.DELETE;
+import static jakarta.ws.rs.HttpMethod.GET;
+import static jakarta.ws.rs.HttpMethod.PATCH;
+import static jakarta.ws.rs.HttpMethod.POST;
+import static jakarta.ws.rs.HttpMethod.PUT;
+import jakarta.ws.rs.client.Entity;
+import jakarta.ws.rs.container.ContainerRequestContext;
+import jakarta.ws.rs.core.Application;
+import jakarta.ws.rs.core.HttpHeaders;
+import static jakarta.ws.rs.core.MediaType.APPLICATION_JSON;
+import jakarta.ws.rs.core.MultivaluedHashMap;
+import jakarta.ws.rs.core.Response;
+import static jakarta.ws.rs.core.Response.Status.BAD_REQUEST;
+import static jakarta.ws.rs.core.Response.Status.FORBIDDEN;
+import static jakarta.ws.rs.core.Response.Status.OK;
+import static jakarta.ws.rs.core.Response.Status.UNSUPPORTED_MEDIA_TYPE;
 import java.util.Collections;
 import java.util.Map;
-import static javax.ws.rs.HttpMethod.DELETE;
-import static javax.ws.rs.HttpMethod.GET;
-import static javax.ws.rs.HttpMethod.PATCH;
-import static javax.ws.rs.HttpMethod.POST;
-import static javax.ws.rs.HttpMethod.PUT;
-import javax.ws.rs.client.Entity;
-import javax.ws.rs.container.ContainerRequestContext;
-import javax.ws.rs.core.Application;
-import javax.ws.rs.core.HttpHeaders;
-import static javax.ws.rs.core.MediaType.APPLICATION_JSON;
-import javax.ws.rs.core.MultivaluedHashMap;
-import javax.ws.rs.core.Response;
-import static javax.ws.rs.core.Response.Status.BAD_REQUEST;
-import static javax.ws.rs.core.Response.Status.FORBIDDEN;
-import static javax.ws.rs.core.Response.Status.OK;
-import static javax.ws.rs.core.Response.Status.UNSUPPORTED_MEDIA_TYPE;
 import org.glassfish.jersey.client.ClientConfig;
 import org.glassfish.jersey.process.Inflector;
 import org.glassfish.jersey.server.ResourceConfig;
 import org.glassfish.jersey.server.model.Resource;
 import org.glassfish.jersey.test.JerseyTest;
-import org.junit.AfterClass;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterAll;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 
 /**
  *
@@ -65,7 +65,7 @@ public class ProxyResourceHandlerIT extends JerseyTest {
 	private static final String JWT = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBpZCI6ImFwcDpteWFwcCJ9."
 				+ "M4uitKDuclLuZzadxNzL_3fjeShKBxPdncsNKkA-rfY";
 
-	@BeforeClass
+	@BeforeAll
 	public static void setUpClass() {
 		System.setProperty("para.env", "embedded");
 		System.setProperty("para.app_name", "para-test");
@@ -75,7 +75,7 @@ public class ProxyResourceHandlerIT extends JerseyTest {
 		ESUtils.createIndex("myapp");
 	}
 
-	@AfterClass
+	@AfterAll
 	public static void tearDownClass() {
 		ESUtils.deleteIndex("myapp");
 	}
