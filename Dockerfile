@@ -1,4 +1,4 @@
-FROM adoptopenjdk/openjdk11:alpine-jre
+FROM eclipse-temurin:21-alpine
 
 RUN mkdir -p /para/lib
 
