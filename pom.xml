@@ -53,7 +53,7 @@
 		<skipTests>false</skipTests>
 		<skipITs>${skipTests}</skipITs>
 		<skipUTs>${skipTests}</skipUTs>
-		<elasticsearch.version>8.13.3</elasticsearch.version>
+		<elasticsearch.version>8.13.4</elasticsearch.version>
 		<jerseyVer>3.1.6</jerseyVer>
 	</properties>
 
@@ -191,7 +191,7 @@
 							<shadedArtifactAttached>true</shadedArtifactAttached>
 							<createDependencyReducedPom>false</createDependencyReducedPom>
 							<transformers>
-								<transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer" />
+								<transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
 							</transformers>
 							<filters>
 								<filter>
