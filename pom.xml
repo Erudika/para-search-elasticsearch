@@ -38,7 +38,7 @@
 
 	<scm>
 		<connection>scm:git:https://github.com/erudika/para-search-elasticsearch.git</connection>
-		<developerConnection>scm:git:git@github.com:erudika/para-search-elasticsearch.git</developerConnection>
+		<developerConnection>scm:git:https://github.com/erudika/para-search-elasticsearch.git</developerConnection>
 		<url>https://github.com/erudika/para-search-elasticsearch</url>
 		<tag>HEAD</tag>
 	</scm>
@@ -53,8 +53,8 @@
 		<skipTests>false</skipTests>
 		<skipITs>${skipTests}</skipITs>
 		<skipUTs>${skipTests}</skipUTs>
-		<elasticsearch.version>8.15.1</elasticsearch.version>
-		<jerseyVer>3.1.8</jerseyVer>
+		<elasticsearch.version>8.15.3</elasticsearch.version>
+		<jerseyVer>3.1.9</jerseyVer>
 	</properties>
 
 	<dependencies>
@@ -67,7 +67,7 @@
 		<dependency>
 			<groupId>jakarta.ws.rs</groupId>
 			<artifactId>jakarta.ws.rs-api</artifactId>
-			<version>3.1.0</version>
+			<version>4.0.0</version>
 			<scope>provided</scope>
 		</dependency>
 		<dependency>
@@ -97,6 +97,12 @@
 			<artifactId>opensearch-rest-high-level-client</artifactId>
 			<version>2.17.1</version>
 		</dependency>
+		<!-- REMOVE AFTER opensearch has been updated (fixes SNYK issue) -->
+		<dependency>
+			<groupId>com.google.protobuf</groupId>
+			<artifactId>protobuf-java</artifactId>
+			<version>3.25.5</version>
+		</dependency>
 		<dependency>
 			<groupId>co.elastic.clients</groupId>
 			<artifactId>elasticsearch-java</artifactId>
@@ -107,7 +113,7 @@
 		<dependency>
 			<groupId>org.apache.logging.log4j</groupId>
 			<artifactId>log4j-to-slf4j</artifactId>
-			<version>2.24.0</version>
+			<version>2.24.1</version>
 		</dependency>
 
 		<!-- TESTING -->
@@ -140,7 +146,7 @@
 			<plugin>
 				<groupId>com.github.alexcojocaru</groupId>
 				<artifactId>elasticsearch-maven-plugin</artifactId>
-				<version>6.28</version>
+				<version>6.29</version>
 				<configuration>
 					<skip>${skipITs}</skip>
 					<!--<autoCreateIndex>false</autoCreateIndex>-->
@@ -150,7 +156,6 @@
 					<transportPort>9300</transportPort>
 					<httpPort>9200</httpPort>
 					<logLevel>ERROR</logLevel>
-					<timeout>240</timeout>
 					<instanceCount>1</instanceCount>
 					<instanceSettings>
 						<properties>
@@ -220,7 +225,7 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-failsafe-plugin</artifactId>
-				<version>3.5.0</version>
+				<version>3.5.1</version>
 				<executions>
 					<execution>
 						<goals>
@@ -254,7 +259,6 @@
 						<configuration>
 							<skip>${skipTests}</skip>
 							<configLocation>${basedir}/src/main/resources/checkstyle.xml</configLocation>
-							<encoding>UTF-8</encoding>
 							<consoleOutput>true</consoleOutput>
 							<failsOnError>true</failsOnError>
 							<linkXRef>false</linkXRef>
@@ -276,7 +280,6 @@
 					<mavenExecutorId>forked-path</mavenExecutorId>
 					<tagNameFormat>@{project.version}</tagNameFormat>
 					<preparationGoals>clean</preparationGoals>
-					<useReleaseProfile>false</useReleaseProfile>
 					<releaseProfiles>release</releaseProfiles>
 				</configuration>
 			</plugin>
@@ -348,7 +351,7 @@
 					<plugin>
 						<groupId>org.apache.maven.plugins</groupId>
 						<artifactId>maven-javadoc-plugin</artifactId>
-						<version>3.10.0</version>
+						<version>3.10.1</version>
 						<executions>
 							<execution>
 								<id>attach-javadocs</id>
@@ -370,7 +373,7 @@
 					<plugin>
 						<groupId>org.apache.maven.plugins</groupId>
 						<artifactId>maven-gpg-plugin</artifactId>
-						<version>3.2.6</version>
+						<version>3.2.7</version>
 						<executions>
 							<execution>
 								<id>sign-artifacts</id>

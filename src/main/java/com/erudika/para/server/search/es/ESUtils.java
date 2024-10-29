@@ -1048,20 +1048,23 @@ public final class ESUtils {
 		Objects.requireNonNull(field);
 		String key = field.replaceAll("[<>=\\s]+$", "");
 		boolean nestedMode = nestedMode() && field.startsWith(PROPS_PREFIX);
-		RangeQuery.Builder rfb = QueryBuilders.range().field(nestedMode ? getValueFieldName(stringValue) : key);
-		if (">".equals(operator)) {
-			rfb.gt(getNumericValue(stringValue));
-		} else if ("<".equals(operator)) {
-			rfb.lt(getNumericValue(stringValue));
-		} else if (">=".equals(operator)) {
-			rfb.gte(getNumericValue(stringValue));
-		} else if ("<=".equals(operator)) {
-			rfb.lte(getNumericValue(stringValue));
-		}
+		RangeQuery rq = QueryBuilders.range().untyped(qb -> {
+			qb.field(nestedMode ? getValueFieldName(stringValue) : key);
+			if (">".equals(operator)) {
+				qb.gt(getNumericValue(stringValue));
+			} else if ("<".equals(operator)) {
+				qb.lt(getNumericValue(stringValue));
+			} else if (">=".equals(operator)) {
+				qb.gte(getNumericValue(stringValue));
+			} else if ("<=".equals(operator)) {
+				qb.lte(getNumericValue(stringValue));
+			}
+			return qb;
+		}).build();
 		if (nestedMode) {
-			return (QueryVariant) nestedPropsQuery(keyValueBoolQuery(key, rfb.build())).build();
+			return (QueryVariant) nestedPropsQuery(keyValueBoolQuery(key, rq)).build();
 		} else {
-			return rfb.build();
+			return rq;
 		}
 	}
 
@@ -1138,23 +1141,27 @@ public final class ESUtils {
 			String from = trq.getLowerTerm() != null ? Term.toString(trq.getLowerTerm()) : "*";
 			String to = trq.getUpperTerm() != null ? Term.toString(trq.getUpperTerm()) : "*";
 			boolean isNestedField = trq.getField().matches(PROPS_REGEX);
-			qb = QueryBuilders.range().field(isNestedField ? getValueFieldNameFromRange(from, to) : trq.getField());
 			if ("*".equals(from) && "*".equals(to)) {
 				qb = QueryBuilders.matchAll();
-			}
-			if (!"*".equals(from)) {
-				if (trq.includesLower()) {
-					((RangeQuery.Builder) qb).gte(getNumericValue(from));
-				} else {
-					((RangeQuery.Builder) qb).gt(getNumericValue(from));
-				}
-			}
-			if (!"*".equals(to)) {
-				if (trq.includesUpper()) {
-					((RangeQuery.Builder) qb).lte(getNumericValue(to));
-				} else {
-					((RangeQuery.Builder) qb).lt(getNumericValue(to));
-				}
+			} else {
+				qb = QueryBuilders.range().untyped(b -> {
+					b.field(isNestedField ? getValueFieldNameFromRange(from, to) : trq.getField());
+					if (!"*".equals(from)) {
+						if (trq.includesLower()) {
+							b.gte(getNumericValue(from));
+						} else {
+							b.gt(getNumericValue(from));
+						}
+					}
+					if (!"*".equals(to)) {
+						if (trq.includesUpper()) {
+							b.lte(getNumericValue(to));
+						} else {
+							b.lt(getNumericValue(to));
+						}
+					}
+					return b;
+				});
 			}
 			if (isNestedField) {
 				qb = nestedPropsQuery(keyValueBoolQuery(trq.getField(), (QueryVariant) qb.build()));
