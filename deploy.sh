@@ -14,7 +14,7 @@ echo "Maven release done, publishing release on GitHub..," && \
 git log $lastver..HEAD --oneline > changelog.txt && \
 echo "" >> changelog.txt && \
 echo "" >> changelog.txt && \
-echo "### :package: [Download JAR](https://oss.sonatype.org/service/local/repositories/releases/content/com/erudika/para-search-elasticsearch/${ver}/para-search-elasticsearch-${ver}-shaded.jar)" >> changelog.txt && \
+echo "### :package: [Download JAR](https://repo1.maven.org/maven2/com/erudika/para-search-elasticsearch/${ver}/para-search-elasticsearch-${ver}-shaded.jar)" >> changelog.txt && \
 gh release create -F changelog.txt -t "v$ver" $ver && \
 rm changelog.txt
 
