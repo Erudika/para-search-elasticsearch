@@ -28,16 +28,6 @@ import com.erudika.para.core.utils.Pager;
 import com.erudika.para.core.utils.Para;
 import com.erudika.para.core.utils.ParaObjectUtils;
 import com.fasterxml.jackson.databind.JsonNode;
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.URISyntaxException;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.TimeUnit;
 import static jakarta.ws.rs.HttpMethod.DELETE;
 import static jakarta.ws.rs.HttpMethod.GET;
 import static jakarta.ws.rs.HttpMethod.PATCH;
@@ -49,15 +39,26 @@ import static jakarta.ws.rs.core.HttpHeaders.CONTENT_LENGTH;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URISyntaxException;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.http.Header;
-import org.apache.http.HttpEntity;
-import org.apache.http.HttpHost;
-import org.apache.http.NameValuePair;
-import org.apache.http.client.utils.URIBuilder;
-import org.apache.http.entity.ContentType;
-import org.apache.http.entity.InputStreamEntity;
-import org.apache.http.message.BasicHeader;
+import org.apache.hc.core5.http.ContentType;
+import org.apache.hc.core5.http.Header;
+import org.apache.hc.core5.http.HttpEntity;
+import org.apache.hc.core5.http.HttpHost;
+import org.apache.hc.core5.http.NameValuePair;
+import org.apache.hc.core5.http.io.entity.InputStreamEntity;
+import org.apache.hc.core5.http.message.BasicHeader;
+import org.apache.hc.core5.net.URIBuilder;
 import org.opensearch.client.Request;
 import org.opensearch.client.RequestOptions;
 import org.opensearch.client.RestClient;
@@ -140,9 +141,18 @@ public class ProxyResourceHandler implements CustomResourceHandler {
 					resp = client.performRequest(esRequest).getEntity();
 				}
 				if (resp != null && resp.getContent() != null) {
-					Header type = resp.getContentType();
+					Optional<? extends Header> type = Optional.empty();
+					if (resp.getTrailers() != null) {
+						type = resp.getTrailers().get().
+								stream().filter(h -> h.getName().equalsIgnoreCase(HttpHeaders.CONTENT_TYPE)).
+								findFirst();
+					}
 					Object response = getTransformedResponse(appid, resp.getContent(), ctx);
-					return Response.ok(response).header(type.getName(), type.getValue()).build();
+					Response.ResponseBuilder rb = Response.ok(response);
+					if (type.isPresent()) {
+						rb.header(HttpHeaders.CONTENT_TYPE, type.get().getValue());
+					}
+					return rb.build();
 				}
 			}
 		} catch (Exception ex) {
@@ -159,7 +169,7 @@ public class ProxyResourceHandler implements CustomResourceHandler {
 			String esScheme = Para.getConfig().elasticsearchRestClientScheme();
 			String esHost = Para.getConfig().elasticsearchRestClientHost();
 			int esPort = Para.getConfig().elasticsearchRestClientPort();
-			lowLevelClient = RestClient.builder(new HttpHost(esHost, esPort, esScheme)).build();
+			lowLevelClient = RestClient.builder(new HttpHost(esScheme, esHost, esPort)).build();
 			Para.addDestroyListener(new DestroyListener() {
 				public void onDestroy() {
 					if (lowLevelClient != null) {

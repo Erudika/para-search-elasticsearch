@@ -47,7 +47,9 @@ import co.elastic.clients.elasticsearch.indices.update_aliases.AddAction;
 import co.elastic.clients.elasticsearch.indices.update_aliases.RemoveAction;
 import co.elastic.clients.json.JsonData;
 import co.elastic.clients.json.jackson.JacksonJsonpMapper;
-import co.elastic.clients.transport.rest_client.RestClientTransport;
+import co.elastic.clients.transport.rest5_client.Rest5ClientTransport;
+import co.elastic.clients.transport.rest5_client.low_level.Rest5Client;
+import co.elastic.clients.transport.rest5_client.low_level.Rest5ClientBuilder;
 import co.elastic.clients.util.ObjectBuilder;
 import com.erudika.para.core.App;
 import com.erudika.para.core.ParaObject;
@@ -74,19 +76,19 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.math.NumberUtils;
-import org.apache.http.Header;
+import org.apache.hc.client5.http.auth.AuthScope;
+import org.apache.hc.client5.http.auth.UsernamePasswordCredentials;
+import org.apache.hc.client5.http.impl.async.HttpAsyncClientBuilder;
+import org.apache.hc.client5.http.impl.auth.BasicCredentialsProvider;
+import org.apache.hc.core5.http.EntityDetails;
+import org.apache.hc.core5.http.Header;
+import org.apache.hc.core5.http.HttpHost;
+import org.apache.hc.core5.http.HttpRequest;
+import org.apache.hc.core5.http.NameValuePair;
+import org.apache.hc.core5.http.protocol.HttpContext;
+import org.apache.hc.core5.net.URIBuilder;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpEntityEnclosingRequest;
-import org.apache.http.HttpHost;
-import org.apache.http.HttpRequest;
-import org.apache.http.NameValuePair;
-import org.apache.http.auth.AuthScope;
-import org.apache.http.auth.UsernamePasswordCredentials;
-import org.apache.http.client.CredentialsProvider;
-import org.apache.http.client.utils.URIBuilder;
-import org.apache.http.impl.client.BasicCredentialsProvider;
-import org.apache.http.impl.nio.client.HttpAsyncClientBuilder;
-import org.apache.http.protocol.HttpContext;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.queryparser.flexible.core.QueryNodeException;
 import org.apache.lucene.queryparser.flexible.standard.StandardQueryParser;
@@ -98,8 +100,6 @@ import org.apache.lucene.search.PrefixQuery;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.TermRangeQuery;
 import org.apache.lucene.search.WildcardQuery;
-import org.elasticsearch.client.RestClient;
-import org.elasticsearch.client.RestClientBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.auth.credentials.AwsCredentials;
@@ -220,34 +220,28 @@ public final class ESUtils {
 		int esPort = Para.getConfig().elasticsearchRestClientPort();
 		boolean signRequests = Para.getConfig().elasticsearchSignRequestsForAwsEnabled();
 
-		HttpHost host = new HttpHost(esHost, esPort, esScheme);
-		RestClientBuilder clientBuilder = RestClient.builder(host);
+		HttpHost host = new HttpHost(esScheme, esHost, esPort);
+		Rest5ClientBuilder clientBuilder = Rest5Client.builder(host);
 
 		String esPrefix = Para.getConfig().elasticsearchRestClientContextPath();
 		if (StringUtils.isNotEmpty(esPrefix)) {
 			clientBuilder.setPathPrefix(esPrefix);
 		}
 
-		List<RestClientBuilder.HttpClientConfigCallback> configurationCallbacks = new ArrayList<>();
-
-		if (signRequests) {
-			configurationCallbacks.add(getAWSRequestSigningInterceptor(host.getSchemeName() + "://" + host.getHostName()));
-		}
-		configurationCallbacks.add(getAuthenticationCallback());
-
 		// register all customizations
 		clientBuilder.setHttpClientConfigCallback(httpClientBuilder -> {
-			configurationCallbacks.forEach(c -> c.customizeHttpClient(httpClientBuilder));
-			if (esHost.startsWith("localhost") || !Para.getConfig().inProduction()) {
-				httpClientBuilder.setSSLHostnameVerifier((hostname, session) -> true);
-//				httpClientBuilder.setSSLContext(SSLContextBuilder.create().);
-
+			if (signRequests) {
+				addAWSRequestSigningInterceptor(httpClientBuilder, host.getSchemeName() + "://" + host.getHostName());
 			}
-			return httpClientBuilder;
+			addAuthenticationCallback(httpClientBuilder);
+
+//			if (esHost.startsWith("localhost") || !Para.getConfig().inProduction()) {
+//				httpClientBuilder.setSSLHostnameVerifier((hostname, session) -> true);
+//			}
 		});
 
 		// Create the transport with a Jackson mapper
-		RestClientTransport transport = new RestClientTransport(clientBuilder.build(), new JacksonJsonpMapper());
+		Rest5ClientTransport transport = new Rest5ClientTransport(clientBuilder.build(), new JacksonJsonpMapper());
 		restClient = new ElasticsearchClient(transport);
 		restClientAsync = new ElasticsearchAsyncClient(transport);
 
@@ -726,7 +720,7 @@ public final class ESUtils {
 			return appid;
 		}
 		try {
-			Map<String, IndexAliases> aliases = getRESTClient().indices().getAlias(b -> b.index(appid)).result();
+			Map<String, IndexAliases> aliases = getRESTClient().indices().getAlias(b -> b.index(appid)).aliases();
 			if (!aliases.isEmpty()) {
 				return aliases.keySet().iterator().next();
 			}
@@ -1100,19 +1094,19 @@ public final class ESUtils {
 		if (q instanceof BooleanQuery) {
 			qb = QueryBuilders.bool();
 			for (BooleanClause clause : ((BooleanQuery) q).clauses()) {
-				switch (clause.getOccur()) {
+				switch (clause.occur()) {
 					case MUST:
-						((BoolQuery.Builder) qb).must(rewriteQuery(clause.getQuery(), depth++)._toQuery());
+						((BoolQuery.Builder) qb).must(rewriteQuery(clause.query(), depth++)._toQuery());
 						break;
 					case MUST_NOT:
-						((BoolQuery.Builder) qb).mustNot(rewriteQuery(clause.getQuery(), depth++)._toQuery());
+						((BoolQuery.Builder) qb).mustNot(rewriteQuery(clause.query(), depth++)._toQuery());
 						break;
 					case FILTER:
-						((BoolQuery.Builder) qb).filter(rewriteQuery(clause.getQuery(), depth++)._toQuery());
+						((BoolQuery.Builder) qb).filter(rewriteQuery(clause.query(), depth++)._toQuery());
 						break;
 					case SHOULD:
 					default:
-						((BoolQuery.Builder) qb).should(rewriteQuery(clause.getQuery(), depth++)._toQuery());
+						((BoolQuery.Builder) qb).should(rewriteQuery(clause.query(), depth++)._toQuery());
 				}
 			}
 		} else if (q instanceof TermRangeQuery) {
@@ -1353,89 +1347,82 @@ public final class ESUtils {
 	 * @param endpoint the ES endpoint URI
 	 * @return a client callback containing the interceptor
 	 */
-	static RestClientBuilder.HttpClientConfigCallback getAWSRequestSigningInterceptor(String endpoint) {
-		return (HttpAsyncClientBuilder httpClientBuilder) -> {
-			httpClientBuilder.addInterceptorLast((HttpRequest request, HttpContext context) -> {
-				Aws4Signer signer = Aws4Signer.create();
-				AwsCredentials creds = DefaultCredentialsProvider.create().resolveCredentials();
-				Aws4SignerParams.Builder<?> signerParams = Aws4SignerParams.builder().
-						awsCredentials(creds).
-						doubleUrlEncode(true).
-						signingName("es").
-						signingRegion(Region.of(Para.getConfig().elasticsearchAwsRegion()));
-				URIBuilder uriBuilder;
-				String httpMethod = request.getRequestLine().getMethod();
-				String resourcePath;
-				Map<String, String> params = new HashMap<>();
+	static void addAWSRequestSigningInterceptor(HttpAsyncClientBuilder httpClientBuilder, String endpoint) {
+		httpClientBuilder.addRequestInterceptorLast((HttpRequest request, EntityDetails ed, HttpContext context) -> {
+			Aws4Signer signer = Aws4Signer.create();
+			AwsCredentials creds = DefaultCredentialsProvider.create().resolveCredentials();
+			Aws4SignerParams.Builder<?> signerParams = Aws4SignerParams.builder().
+					awsCredentials(creds).
+					doubleUrlEncode(true).
+					signingName("es").
+					signingRegion(Region.of(Para.getConfig().elasticsearchAwsRegion()));
+			URIBuilder uriBuilder;
+			String httpMethod = request.getMethod();
+			String resourcePath;
+			Map<String, String> params = new HashMap<>();
 
-				try {
-					SdkHttpFullRequest.Builder r = SdkHttpFullRequest.builder();
-					if (!StringUtils.isBlank(httpMethod)) {
-						r.method(SdkHttpMethod.valueOf(httpMethod));
-					}
-
-					if (!StringUtils.isBlank(endpoint)) {
-						if (endpoint.startsWith("https://")) {
-							r.protocol("HTTPS");
-							r.host(StringUtils.removeStart(endpoint, "https://"));
-						} else if (endpoint.startsWith("http://")) {
-							r.protocol("HTTP");
-							r.host(StringUtils.removeStart(endpoint, "http://"));
-						}
-					}
-
-					uriBuilder = new URIBuilder(request.getRequestLine().getUri());
-					resourcePath = uriBuilder.getPath();
-					if (!StringUtils.isBlank(resourcePath)) {
-						r.encodedPath(resourcePath);
-					}
-
-					for (NameValuePair param : uriBuilder.getQueryParams()) {
-						r.appendRawQueryParameter(param.getName(), param.getValue());
-					}
-
-					if (request instanceof HttpEntityEnclosingRequest) {
-						HttpEntity body = ((HttpEntityEnclosingRequest) request).getEntity();
-						if (body != null) {
-							InputStream is = body.getContent();
-							r.contentStreamProvider(() -> is);
-						}
-					}
-					if (r.contentStreamProvider() == null) {
-						request.removeHeaders("Content-Length");
-					}
-
-					for (Header header : request.getAllHeaders()) {
-						r.putHeader(header.getName(), header.getValue());
-					}
-
-					SdkHttpFullRequest signedReq = signer.sign(r.build(), signerParams.build());
-
-					for (String header : signedReq.headers().keySet()) {
-						request.setHeader(header, signedReq.firstMatchingHeader(header).orElse(""));
-					}
-				} catch (Exception ex) {
-					logger.error("Failed to sign request to AWS Elasticsearch:", ex);
+			try {
+				SdkHttpFullRequest.Builder r = SdkHttpFullRequest.builder();
+				if (!StringUtils.isBlank(httpMethod)) {
+					r.method(SdkHttpMethod.valueOf(httpMethod));
 				}
-			});
-			return httpClientBuilder;
-		};
+
+				if (!StringUtils.isBlank(endpoint)) {
+					if (endpoint.startsWith("https://")) {
+						r.protocol("HTTPS");
+						r.host(StringUtils.removeStart(endpoint, "https://"));
+					} else if (endpoint.startsWith("http://")) {
+						r.protocol("HTTP");
+						r.host(StringUtils.removeStart(endpoint, "http://"));
+					}
+				}
+
+				uriBuilder = new URIBuilder(request.getUri());
+				resourcePath = uriBuilder.getPath();
+				if (!StringUtils.isBlank(resourcePath)) {
+					r.encodedPath(resourcePath);
+				}
+
+				for (NameValuePair param : uriBuilder.getQueryParams()) {
+					r.appendRawQueryParameter(param.getName(), param.getValue());
+				}
+
+				if (request instanceof HttpEntityEnclosingRequest) {
+					HttpEntity body = ((HttpEntityEnclosingRequest) request).getEntity();
+					if (body != null) {
+						InputStream is = body.getContent();
+						r.contentStreamProvider(() -> is);
+					}
+				}
+				if (r.contentStreamProvider() == null) {
+					request.removeHeaders("Content-Length");
+				}
+
+				for (Header header : request.getHeaders()) {
+					r.putHeader(header.getName(), header.getValue());
+				}
+
+				SdkHttpFullRequest signedReq = signer.sign(r.build(), signerParams.build());
+
+				for (String header : signedReq.headers().keySet()) {
+					request.setHeader(header, signedReq.firstMatchingHeader(header).orElse(""));
+				}
+			} catch (Exception ex) {
+				logger.error("Failed to sign request to AWS Elasticsearch:", ex);
+			}
+		});
 	}
 
-	static RestClientBuilder.HttpClientConfigCallback getAuthenticationCallback() {
+	static void addAuthenticationCallback(HttpAsyncClientBuilder httpClientBuilder) {
 		final String basicAuthLogin = Para.getConfig().elasticsearchAuthUser();
 		final String basicAuthPassword = Para.getConfig().elasticsearchAuthPassword();
 
-		if (StringUtils.isAnyEmpty(basicAuthLogin, basicAuthPassword)) {
-			// no authentication
-			return (HttpAsyncClientBuilder httpClientBuilder) -> httpClientBuilder;
-		} else {
+		if (!StringUtils.isAnyEmpty(basicAuthLogin, basicAuthPassword)) {
 			// basic auth as documented by Elastic
-			final CredentialsProvider credentialsProvider = new BasicCredentialsProvider();
-			credentialsProvider.setCredentials(AuthScope.ANY,
-					new UsernamePasswordCredentials(basicAuthLogin, basicAuthPassword));
-			return (HttpAsyncClientBuilder httpClientBuilder) -> httpClientBuilder.
-					setDefaultCredentialsProvider(credentialsProvider);
+			final BasicCredentialsProvider credentialsProvider = new BasicCredentialsProvider();
+			credentialsProvider.setCredentials(new AuthScope(null, -1),
+					new UsernamePasswordCredentials(basicAuthLogin, basicAuthPassword.toCharArray()));
+			httpClientBuilder.setDefaultCredentialsProvider(credentialsProvider);
 		}
 	}
 }

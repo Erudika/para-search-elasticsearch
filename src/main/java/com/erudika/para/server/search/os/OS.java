@@ -482,7 +482,7 @@ public final class OS {
 			logger.debug("Elasticsearch query: {}", debugQuery);
 
 			hits = getRESTClient().search(search, RequestOptions.DEFAULT).getHits();
-			page.setCount(hits.getTotalHits().value);
+			page.setCount(hits.getTotalHits().value());
 			if (hits.getHits().length > 0) {
 				Object id = hits.getAt(hits.getHits().length - 1).getSourceAsMap().get("_docid");
 				if (id != null) {
