@@ -50,6 +50,7 @@ import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.Strings;
 import org.apache.commons.lang3.math.NumberUtils;
 import static org.apache.lucene.search.join.ScoreMode.Avg;
 import org.opensearch.action.delete.DeleteRequest;
@@ -293,7 +294,7 @@ public final class OS {
 		if (fields == null || fields.length == 0) {
 			qb = moreLikeThisQuery(new String[]{liketext}).minDocFreq(1).minTermFreq(1).minimumShouldMatch(matchPercent);
 		} else {
-			boolean containsNestedProps = Arrays.stream(fields).anyMatch((f) -> StringUtils.startsWith(f, PROPS_PREFIX));
+			boolean containsNestedProps = Arrays.stream(fields).anyMatch((f) -> Strings.CS.startsWith(f, PROPS_PREFIX));
 			if (nestedMode() && containsNestedProps) {
 				BoolQueryBuilder bqb = boolQuery();
 				for (String field : fields) {

@@ -68,6 +68,7 @@ import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.Strings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -295,7 +296,7 @@ public final class ES {
 			qb = QueryBuilders.moreLikeThis().like(l -> l.text(liketext)).
 					minDocFreq(1).minTermFreq(1).minimumShouldMatch(matchPercent).build();
 		} else {
-			boolean containsNestedProps = Arrays.stream(fields).anyMatch((f) -> StringUtils.startsWith(f, PROPS_PREFIX));
+			boolean containsNestedProps = Arrays.stream(fields).anyMatch((f) -> Strings.CS.startsWith(f, PROPS_PREFIX));
 			if (nestedMode() && containsNestedProps) {
 				BoolQuery.Builder bqb = QueryBuilders.bool();
 				for (String field : fields) {

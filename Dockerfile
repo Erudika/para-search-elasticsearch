@@ -1,8 +1,4 @@
-FROM eclipse-temurin:21-alpine
-
-RUN mkdir -p /para/lib
-
-WORKDIR /para
+FROM alpine
 
 ENV PARA_PLUGIN_ID="para-search-elasticsearch" \
 	PARA_PLUGIN_VER="1.42.0"

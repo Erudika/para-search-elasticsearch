@@ -51,6 +51,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.Strings;
 import org.apache.hc.core5.http.ContentType;
 import org.apache.hc.core5.http.Header;
 import org.apache.hc.core5.http.HttpEntity;
@@ -207,7 +208,7 @@ public class ProxyResourceHandler implements CustomResourceHandler {
 	}
 
 	public String getCleanPath(String appid, String path) {
-		if (StringUtils.containsIgnoreCase(path, "getRawResponse")) {
+		if (Strings.CI.contains(path, "getRawResponse")) {
 			try {
 				URIBuilder uri = new URIBuilder(path);
 				List<NameValuePair> params = uri.getQueryParams();
@@ -256,7 +257,7 @@ public class ProxyResourceHandler implements CustomResourceHandler {
 
 	private Object getTransformedResponse(String appid, InputStream content, ContainerRequestContext ctx) {
 		if (ctx.getUriInfo().getQueryParameters().containsKey("getRawResponse") ||
-				StringUtils.containsIgnoreCase(getPath(ctx), "getRawResponse=")) {
+				Strings.CI.contains(getPath(ctx), "getRawResponse=")) {
 			return content;
 		} else {
 			try {

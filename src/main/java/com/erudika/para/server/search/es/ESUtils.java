@@ -56,11 +56,13 @@ import com.erudika.para.core.ParaObject;
 import com.erudika.para.core.Sysprop;
 import com.erudika.para.core.listeners.DestroyListener;
 import com.erudika.para.core.persistence.DAO;
+import com.erudika.para.core.rest.Signer;
 import com.erudika.para.core.utils.Config;
 import com.erudika.para.core.utils.Pager;
 import com.erudika.para.core.utils.Para;
 import com.erudika.para.core.utils.ParaObjectUtils;
 import com.erudika.para.core.utils.Utils;
+import com.github.davidmoten.aws.lw.client.Credentials;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -75,6 +77,7 @@ import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.Strings;
 import org.apache.commons.lang3.math.NumberUtils;
 import org.apache.hc.client5.http.auth.AuthScope;
 import org.apache.hc.client5.http.auth.UsernamePasswordCredentials;
@@ -102,13 +105,6 @@ import org.apache.lucene.search.TermRangeQuery;
 import org.apache.lucene.search.WildcardQuery;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import software.amazon.awssdk.auth.credentials.AwsCredentials;
-import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
-import software.amazon.awssdk.auth.signer.Aws4Signer;
-import software.amazon.awssdk.auth.signer.params.Aws4SignerParams;
-import software.amazon.awssdk.http.SdkHttpFullRequest;
-import software.amazon.awssdk.http.SdkHttpMethod;
-import software.amazon.awssdk.regions.Region;
 
 /**
  *
@@ -425,11 +421,14 @@ public final class ESUtils {
 			List<BulkOperation> batch = new LinkedList<>();
 			Pager p = getPager(pager);
 			int batchSize = Para.getConfig().reindexBatchSize(p.getLimit());
+			if (batchSize <= 0) {
+				batchSize = p.getLimit();
+			}
 			long reindexedCount = 0;
 			List<ParaObject> list;
 			final String newIndex = newName;
 			do {
-				list = dao.readPage(app.getAppIdentifier(), p); // use appid!
+				list = dao.readPage(app.getAppIdentifier(), p); // use app identifier without trimming it
 				logger.debug("rebuildIndex(): Read {} objects from table {}.", list.size(), indexName);
 				for (final ParaObject obj : list) {
 					if (obj != null) {
@@ -449,7 +448,7 @@ public final class ESUtils {
 			} while (!list.isEmpty());
 
 			// anything left after loop? index that too
-			if (batch.size() > 0) {
+			if (!batch.isEmpty()) {
 				reindexedCount += batch.size();
 				executeRequests(batch);
 				logger.debug("rebuildIndex(): indexed {}", batch.size());
@@ -507,7 +506,7 @@ public final class ESUtils {
 	 */
 	public static long deleteByQuery(String appid, QueryVariant fb, Consumer<DeleteByQueryResponse> cb) {
 		int batchSize = 1000;
-		boolean isSharingIndex = !App.isRoot(appid) && StringUtils.startsWith(appid, " ");
+		boolean isSharingIndex = !App.isRoot(appid) && Strings.CS.startsWith(appid, " ");
 		String indexName = getIndexName(appid);
 		DeleteByQueryRequest.Builder deleteByQueryReq = new DeleteByQueryRequest.Builder();
 		deleteByQueryReq.index(indexName);
@@ -598,7 +597,7 @@ public final class ESUtils {
 						order(order).
 						nested(n -> n.path(PROPS_FIELD).
 						filter(nf -> nf.term(t -> t.field(PROPS_FIELD + ".k").
-						value(fv -> fv.stringValue(StringUtils.removeStart(fieldName, PROPS_FIELD + "."))))))));
+						value(fv -> fv.stringValue(Strings.CS.removeStart(fieldName, PROPS_FIELD + "."))))))));
 	}
 
 	/**
@@ -1290,8 +1289,8 @@ public final class ESUtils {
 	 * @return translate "properties.path.to.key" to "properties.path-to-key"
 	 */
 	static String getNestedKey(String key) {
-		if (StringUtils.startsWith(key, PROPS_PREFIX)) {
-			return StringUtils.removeStart(key, PROPS_PREFIX).replaceAll("\\[(\\d+)\\]", "-$1").replaceAll("\\.", "-");
+		if (Strings.CS.startsWith(key, PROPS_PREFIX)) {
+			return Strings.CS.removeStart(key, PROPS_PREFIX).replaceAll("\\[(\\d+)\\]", "-$1").replaceAll("\\.", "-");
 		}
 		return key;
 	}
@@ -1339,73 +1338,47 @@ public final class ESUtils {
 	 * @return e.g. "index-name_*"
 	 */
 	static String getIndexNameWithWildcard(String indexName) {
-		return StringUtils.contains(indexName, "_") ? indexName : indexName + "_*"; // ES v6
+		return Strings.CS.contains(indexName, "_") ? indexName : indexName + "_*"; // ES v6
 	}
 
 	/**
 	 * Intercepts and signs requests to AWS Elasticsearch endpoints.
 	 * @param endpoint the ES endpoint URI
-	 * @return a client callback containing the interceptor
 	 */
-	static void addAWSRequestSigningInterceptor(HttpAsyncClientBuilder httpClientBuilder, String endpoint) {
+	public static void addAWSRequestSigningInterceptor(HttpAsyncClientBuilder httpClientBuilder, String endpoint) {
 		httpClientBuilder.addRequestInterceptorLast((HttpRequest request, EntityDetails ed, HttpContext context) -> {
-			Aws4Signer signer = Aws4Signer.create();
-			AwsCredentials creds = DefaultCredentialsProvider.create().resolveCredentials();
-			Aws4SignerParams.Builder<?> signerParams = Aws4SignerParams.builder().
-					awsCredentials(creds).
-					doubleUrlEncode(true).
-					signingName("es").
-					signingRegion(Region.of(Para.getConfig().elasticsearchAwsRegion()));
+			Signer s = new Signer();
+			Credentials cred = Credentials.fromEnvironment();
 			URIBuilder uriBuilder;
-			String httpMethod = request.getMethod();
 			String resourcePath;
+			InputStream body = null;
 			Map<String, String> params = new HashMap<>();
+			Map<String, String> headers = new HashMap<>();
 
 			try {
-				SdkHttpFullRequest.Builder r = SdkHttpFullRequest.builder();
-				if (!StringUtils.isBlank(httpMethod)) {
-					r.method(SdkHttpMethod.valueOf(httpMethod));
-				}
-
-				if (!StringUtils.isBlank(endpoint)) {
-					if (endpoint.startsWith("https://")) {
-						r.protocol("HTTPS");
-						r.host(StringUtils.removeStart(endpoint, "https://"));
-					} else if (endpoint.startsWith("http://")) {
-						r.protocol("HTTP");
-						r.host(StringUtils.removeStart(endpoint, "http://"));
-					}
-				}
-
 				uriBuilder = new URIBuilder(request.getUri());
 				resourcePath = uriBuilder.getPath();
-				if (!StringUtils.isBlank(resourcePath)) {
-					r.encodedPath(resourcePath);
-				}
 
 				for (NameValuePair param : uriBuilder.getQueryParams()) {
-					r.appendRawQueryParameter(param.getName(), param.getValue());
+					params.put(param.getName(), param.getValue());
 				}
 
 				if (request instanceof HttpEntityEnclosingRequest) {
-					HttpEntity body = ((HttpEntityEnclosingRequest) request).getEntity();
-					if (body != null) {
-						InputStream is = body.getContent();
-						r.contentStreamProvider(() -> is);
+					HttpEntity entity = ((HttpEntityEnclosingRequest) request).getEntity();
+					if (entity != null) {
+						body = entity.getContent();
 					}
-				}
-				if (r.contentStreamProvider() == null) {
-					request.removeHeaders("Content-Length");
 				}
 
 				for (Header header : request.getHeaders()) {
-					r.putHeader(header.getName(), header.getValue());
+					headers.put(header.getName(), header.getValue());
 				}
 
-				SdkHttpFullRequest signedReq = signer.sign(r.build(), signerParams.build());
+				s.sign(request.getMethod(), endpoint, resourcePath, headers, params, body,
+						cred.accessKey(), cred.secretKey(), "es", Para.getConfig().elasticsearchAwsRegion(), true);
 
-				for (String header : signedReq.headers().keySet()) {
-					request.setHeader(header, signedReq.firstMatchingHeader(header).orElse(""));
+				for (String header : headers.keySet()) {
+					request.setHeader(header, headers.get(header));
 				}
 			} catch (Exception ex) {
 				logger.error("Failed to sign request to AWS Elasticsearch:", ex);
