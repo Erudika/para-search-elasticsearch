@@ -32,8 +32,6 @@ import com.erudika.para.server.search.os.OSUtils;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import jakarta.inject.Inject;
-import jakarta.inject.Singleton;
 import org.opensearch.core.action.ActionListener;
 import static org.opensearch.index.query.QueryBuilders.matchAllQuery;
 import org.opensearch.index.reindex.BulkByScrollResponse;
@@ -44,7 +42,6 @@ import org.slf4j.LoggerFactory;
  * An implementation of the {@link Search} interface using Elasticsearch/OpenSearch.
  * @author Alex Bogdanovski [alex@erudika.com]
  */
-@Singleton
 public class ElasticSearch implements Search {
 
 	private static final Logger logger = LoggerFactory.getLogger(ElasticSearch.class);
@@ -75,7 +72,6 @@ public class ElasticSearch implements Search {
 	 * Default constructor.
 	 * @param dao an instance of the persistence class
 	 */
-	@Inject
 	public ElasticSearch(DAO dao) {
 		ES.setDao(dao);
 		OS.setDao(dao);
