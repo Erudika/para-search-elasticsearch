@@ -4,7 +4,7 @@
 
 	<groupId>com.erudika</groupId>
 	<artifactId>para-search-elasticsearch</artifactId>
-	<version>1.42.2-SNAPSHOT</version>
+	<version>1.42.3-SNAPSHOT</version>
 	<packaging>jar</packaging>
 
 	<name>Para Elasticsearch Plugin</name>
@@ -53,7 +53,7 @@
 		<skipTests>false</skipTests>
 		<skipITs>${skipTests}</skipITs>
 		<skipUTs>${skipTests}</skipUTs>
-		<elasticsearch.version>9.2.3</elasticsearch.version>
+		<elasticsearch.version>9.4.4</elasticsearch.version>
 		<jerseyVer>4.0.0</jerseyVer>
 	</properties>
 
@@ -61,13 +61,13 @@
 		<dependency>
 			<groupId>com.erudika</groupId>
 			<artifactId>para-core</artifactId>
-			<version>1.52.0</version>
+			<version>1.54.7</version>
 			<scope>provided</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework</groupId>
 			<artifactId>spring-webmvc</artifactId>
-			<version>7.0.6</version>
+			<version>7.0.8</version>
 			<scope>provided</scope>
 		</dependency>
 		<dependency>
@@ -81,13 +81,13 @@
 		<dependency>
 			<groupId>org.opensearch.client</groupId>
 			<artifactId>opensearch-rest-high-level-client</artifactId>
-			<version>3.4.0</version>
+			<version>3.7.0</version>
 		</dependency>
 		<!-- REMOVE AFTER opensearch has been updated (fixes SNYK issue) -->
 		<dependency>
 			<groupId>com.google.protobuf</groupId>
 			<artifactId>protobuf-java</artifactId>
-			<version>4.33.2</version>
+			<version>4.35.1</version>
 		</dependency>
 		<dependency>
 			<groupId>co.elastic.clients</groupId>
@@ -97,7 +97,7 @@
 		<dependency>
 			<groupId>commons-codec</groupId>
 			<artifactId>commons-codec</artifactId>
-			<version>1.20.0</version>
+			<version>1.22.0</version>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.httpcomponents</groupId>
@@ -109,45 +109,45 @@
 		<dependency>
 			<groupId>org.apache.logging.log4j</groupId>
 			<artifactId>log4j-to-slf4j</artifactId>
-			<version>2.25.3</version>
+			<version>2.26.1</version>
 		</dependency>
 
 		<!-- TESTING -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-test</artifactId>
-			<version>4.0.1</version>
+			<version>4.1.0</version>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.mockito</groupId>
 			<artifactId>mockito-core</artifactId>
-			<version>5.21.0</version>
+			<version>5.23.0</version>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.junit.jupiter</groupId>
 			<artifactId>junit-jupiter</artifactId>
-			<version>6.0.1</version>
+			<version>6.1.2</version>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.junit.jupiter</groupId>
 			<artifactId>junit-jupiter-api</artifactId>
-			<version>6.0.1</version>
+			<version>6.1.2</version>
 			<scope>test</scope>
 			<type>jar</type>
 		</dependency>
 		<dependency>
 			<groupId>org.junit.jupiter</groupId>
 			<artifactId>junit-jupiter-engine</artifactId>
-			<version>6.0.1</version>
+			<version>6.1.2</version>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.junit.jupiter</groupId>
 			<artifactId>junit-jupiter-params</artifactId>
-			<version>6.0.1</version>
+			<version>6.1.2</version>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
@@ -198,7 +198,7 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-shade-plugin</artifactId>
-				<version>3.6.1</version>
+				<version>3.6.2</version>
 				<executions>
 					<execution>
 						<phase>package</phase>
@@ -230,7 +230,7 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
-				<version>3.14.1</version>
+				<version>3.15.0</version>
 				<configuration>
 					<release>21</release>
 				</configuration>
@@ -239,7 +239,7 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-failsafe-plugin</artifactId>
-				<version>3.5.4</version>
+				<version>3.5.6</version>
 				<executions>
 					<execution>
 						<goals>
@@ -300,7 +300,7 @@
 			<plugin>
 				<groupId>org.sonatype.central</groupId>
 				<artifactId>central-publishing-maven-plugin</artifactId>
-				<version>0.9.0</version>
+				<version>0.11.0</version>
 				<extensions>true</extensions>
 				<configuration>
 					<publishingServerId>central</publishingServerId>
