@@ -356,6 +356,51 @@ public abstract class SearchTest {
 	}
 
 	@Test
+	public void testSortByRelevanceOnUnsetSortby() {
+		// index two docs, one with a term appearing more often than the other.
+		// With an unset sortby the backend must fall back to relevance (score) ordering.
+		Sysprop high = new Sysprop("test-score-high");
+		high.addProperty("text", "scoold scoold scoold scoold scoold");
+		Sysprop low = new Sysprop("test-score-low");
+		low.addProperty("text", "scoold");
+		s.indexAll(Arrays.asList(high, low));
+		try {
+			Thread.sleep(1000);
+		} catch (InterruptedException ex) { }
+
+		Pager p = new Pager(10);
+		p.setSortby(null);
+		List<ParaObject> res = s.findQuery(high.getType(), "properties.text:scoold", p);
+		assertEquals(2, res.size());
+		assertEquals(high.getId(), res.get(0).getId());
+		assertEquals(low.getId(), res.get(1).getId());
+
+		s.unindexAll(Arrays.asList(high, low));
+	}
+
+	@Test
+	public void testSortByRelevanceOnExplicitScore() {
+		// "sortby=_score" is accepted as an explicit flag for relevance/score ordering.
+		Sysprop high = new Sysprop("test-score-high2");
+		high.addProperty("text", "scoop scoop scoop scoop scoop");
+		Sysprop low = new Sysprop("test-score-low2");
+		low.addProperty("text", "scoop");
+		s.indexAll(Arrays.asList(high, low));
+		try {
+			Thread.sleep(1000);
+		} catch (InterruptedException ex) { }
+
+		Pager p = new Pager(10);
+		p.setSortby("_score");
+		List<ParaObject> res = s.findQuery(high.getType(), "properties.text:scoop", p);
+		assertEquals(2, res.size());
+		assertEquals(high.getId(), res.get(0).getId());
+		assertEquals(low.getId(), res.get(1).getId());
+
+		s.unindexAll(Arrays.asList(high, low));
+	}
+
+	@Test
 	public void testIndex() {
 		s.index(null);
 		Sysprop ux = new Sysprop("test-xxx");

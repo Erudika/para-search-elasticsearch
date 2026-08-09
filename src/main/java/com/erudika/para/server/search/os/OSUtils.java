@@ -139,6 +139,10 @@ public final class OSUtils {
 	static final String PROPS_PREFIX = PROPS_FIELD + ".";
 	static final String PROPS_JSON = "_" + PROPS_FIELD;
 	static final String PROPS_REGEX = "(^|.*\\W)" + PROPS_FIELD + "[\\.\\:].+";
+	/**
+	 * Reserved {@code sortby} sentinel for relevance (score) sorting.
+	 */
+	private static final String SCORE_SORT_FIELD = "_score";
 
 	/**
 	 * Switches between normal indexing and indexing with nested key/value objects for Sysprop.properties.
@@ -576,8 +580,12 @@ public final class OSUtils {
 			pager = new Pager();
 		}
 		SortOrder defaultOrder = pager.isDesc() ? SortOrder.DESC : SortOrder.ASC;
-		if (pager.getSortby().contains(",")) {
-			String[] fields = pager.getSortby().split(",");
+		String sortby = pager.getSortby();
+		if (StringUtils.isBlank(sortby) || SCORE_SORT_FIELD.equals(sortby)) {
+			// no sortby (or explicit "_score") means relevance/score ordering
+			return Collections.singletonList(SortBuilders.scoreSort());
+		} else if (sortby.contains(",")) {
+			String[] fields = sortby.split(",");
 			ArrayList<SortBuilder<?>> sortFields = new ArrayList<>(fields.length);
 			for (String field : fields) {
 				SortOrder order;
@@ -592,17 +600,17 @@ public final class OSUtils {
 					order = defaultOrder;
 					fieldName = field.trim();
 				}
-				if (nestedMode() && fieldName.startsWith(PROPS_PREFIX)) {
+				if (SCORE_SORT_FIELD.equals(fieldName)) {
+					sortFields.add(SortBuilders.scoreSort());
+				} else if (nestedMode() && fieldName.startsWith(PROPS_PREFIX)) {
 					sortFields.add(getNestedFieldSort(fieldName, order));
 				} else {
 					sortFields.add(SortBuilders.fieldSort(fieldName).order(order));
 				}
 			}
 			return sortFields;
-		} else if (StringUtils.isBlank(pager.getSortby())) {
-			return Collections.singletonList(SortBuilders.scoreSort());
 		} else {
-			String fieldName = pager.getSortby();
+			String fieldName = sortby;
 			if (nestedMode() && fieldName.startsWith(PROPS_PREFIX)) {
 				return Collections.singletonList(getNestedFieldSort(fieldName, defaultOrder));
 			} else {

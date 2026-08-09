@@ -123,6 +123,10 @@ public final class ESUtils {
 	static final String PROPS_PREFIX = PROPS_FIELD + ".";
 	static final String PROPS_JSON = "_" + PROPS_FIELD;
 	static final String PROPS_REGEX = "(^|.*\\W)" + PROPS_FIELD + "[\\.\\:].+";
+	/**
+	 * Reserved {@code sortby} sentinel for relevance (score) sorting.
+	 */
+	private static final String SCORE_SORT_FIELD = "_score";
 
 	/**
 	 * Switches between normal indexing and indexing with nested key/value objects for Sysprop.properties.
@@ -556,8 +560,12 @@ public final class ESUtils {
 			pager = new Pager();
 		}
 		SortOrder defaultOrder = pager.isDesc() ? SortOrder.Desc : SortOrder.Asc;
-		if (pager.getSortby().contains(",")) {
-			String[] fields = pager.getSortby().split(",");
+		String sortby = pager.getSortby();
+		if (StringUtils.isBlank(sortby) || SCORE_SORT_FIELD.equals(sortby)) {
+			// no sortby (or explicit "_score") means relevance/score ordering
+			return Collections.singletonList(SortOptions.of(b -> b.score(s -> s.order(defaultOrder))));
+		} else if (sortby.contains(",")) {
+			String[] fields = sortby.split(",");
 			ArrayList<SortOptions> sortFields = new ArrayList<>(fields.length);
 			for (String field : fields) {
 				SortOrder order;
@@ -572,17 +580,17 @@ public final class ESUtils {
 					order = defaultOrder;
 					fieldName = field.trim();
 				}
-				if (nestedMode() && fieldName.startsWith(PROPS_PREFIX)) {
+				if (SCORE_SORT_FIELD.equals(fieldName)) {
+					sortFields.add(SortOptions.of(b -> b.score(s -> s.order(order))));
+				} else if (nestedMode() && fieldName.startsWith(PROPS_PREFIX)) {
 					sortFields.add(getNestedFieldSort(fieldName, order));
 				} else {
 					sortFields.add(SortOptions.of(b -> b.field(f -> f.field(fieldName).order(order))));
 				}
 			}
 			return sortFields;
-		} else if (StringUtils.isBlank(pager.getSortby())) {
-			return Collections.singletonList(SortOptions.of(b -> b.score(s -> s.order(defaultOrder))));
 		} else {
-			String fieldName = pager.getSortby();
+			String fieldName = sortby;
 			if (nestedMode() && fieldName.startsWith(PROPS_PREFIX)) {
 				return Collections.singletonList(getNestedFieldSort(fieldName, defaultOrder));
 			} else {
