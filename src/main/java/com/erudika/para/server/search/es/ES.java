@@ -218,6 +218,9 @@ public final class ES {
 			}
 		} else {
 			String qs = qs(query);
+			if (qs == null) {
+				return Collections.emptyList();
+			}
 			if ("*".equals(qs)) {
 				qb = QueryBuilders.matchAll().build();
 			} else {
@@ -233,8 +236,12 @@ public final class ES {
 			return Collections.emptyList();
 		}
 		String queryString = "nstd." + field + ":" + query;
+		String parsedQuery = qs(queryString);
+		if (parsedQuery == null) {
+			return Collections.emptyList();
+		}
 		QueryVariant qb = QueryBuilders.nested().path("nstd").query(QueryBuilders.queryString().
-				query(qs(queryString)).build()._toQuery()).scoreMode(ChildScoreMode.Avg).build();
+				query(parsedQuery).build()._toQuery()).scoreMode(ChildScoreMode.Avg).build();
 		return searchQuery(appid, type, qb, pager);
 	}
 
@@ -359,7 +366,11 @@ public final class ES {
 		List<String> parentIds = hits1.hits().hits().stream().filter(Objects::nonNull).
 				map(h -> (String) h.source().get(Config._PARENTID)).collect(Collectors.toList());
 
-		QueryVariant qb2 = QueryBuilders.bool().must(QueryBuilders.queryString().query(qs(query)).build()._toQuery()).
+		String parsedQuery = qs(query);
+		if (parsedQuery == null) {
+			return Collections.emptyList();
+		}
+		QueryVariant qb2 = QueryBuilders.bool().must(QueryBuilders.queryString().query(parsedQuery).build()._toQuery()).
 				filter(QueryBuilders.ids().values(parentIds).build()._toQuery()).build();
 		SearchResponse<Map> hits2 = searchQueryRaw(appid, type, qb2, page);
 		return searchQuery(appid, hits2);

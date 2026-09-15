@@ -223,7 +223,11 @@ public final class OS {
 				return Collections.emptyList();
 			}
 		} else {
-			qb = queryStringQuery(qs(query)).allowLeadingWildcard(false);
+			String parsedQuery = qs(query);
+			if (parsedQuery == null) {
+				return Collections.emptyList();
+			}
+			qb = queryStringQuery(parsedQuery).allowLeadingWildcard(false);
 		}
 		return searchQuery(appid, type, qb, pager);
 	}
@@ -234,7 +238,11 @@ public final class OS {
 			return Collections.emptyList();
 		}
 		String queryString = "nstd." + field + ":" + query;
-		QueryBuilder qb = nestedQuery("nstd", queryStringQuery(qs(queryString)), Avg);
+		String parsedQuery = qs(queryString);
+		if (parsedQuery == null) {
+			return Collections.emptyList();
+		}
+		QueryBuilder qb = nestedQuery("nstd", queryStringQuery(parsedQuery), Avg);
 		return searchQuery(appid, type, qb, pager);
 	}
 
@@ -357,7 +365,11 @@ public final class OS {
 			}
 		}
 
-		QueryBuilder qb2 = boolQuery().must(queryStringQuery(qs(query))).filter(idsQuery().addIds(parentids));
+		String parsedQuery = qs(query);
+		if (parsedQuery == null) {
+			return Collections.emptyList();
+		}
+		QueryBuilder qb2 = boolQuery().must(queryStringQuery(parsedQuery)).filter(idsQuery().addIds(parentids));
 		SearchHits hits2 = searchQueryRaw(appid, type, qb2, page);
 		return searchQuery(appid, hits2);
 	}

@@ -854,7 +854,7 @@ public final class ESUtils {
 	/**
 	 * Tries to parse a query string in order to check if it is valid.
 	 * @param query a Lucene query string
-	 * @return the query if valid, or '*' if invalid
+	 * @return the normalized query if valid, '*' for an explicit match-all query, or null if invalid
 	 */
 	static String qs(String query) {
 		if (StringUtils.isBlank(query) || "*".equals(query.trim())) {
@@ -870,7 +870,7 @@ public final class ESUtils {
 			parser.parse(query, "");
 		} catch (Exception ex) {
 			logger.warn("Failed to parse query string '{}'.", query);
-			query = "*";
+			return null;
 		}
 		return query.trim();
 	}
@@ -1077,9 +1077,12 @@ public final class ESUtils {
 	 */
 	static QueryVariant convertQueryStringToNestedQuery(String query) {
 		String queryStr = StringUtils.trimToEmpty(query).replaceAll("\\[(\\d+)\\]", "-$1"); // nested array syntax
+		if (StringUtils.isBlank(queryStr) || "*".equals(queryStr)) {
+			return QueryBuilders.matchAll().build();
+		}
 		Query q = qsParsed(queryStr);
 		if (q == null) {
-			return QueryBuilders.matchAll().build();
+			return null;
 		}
 		try {
 			return rewriteQuery(q, 0);

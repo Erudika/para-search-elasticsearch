@@ -194,10 +194,10 @@ public abstract class SearchTest {
 		assertFalse(s.findQuery(u.getType(), "Ann*").isEmpty());
 		assertFalse(s.findQuery(u.getType(), "name:(Ann Smith)").isEmpty());
 		assertTrue(s.findQuery(null, "*").size() > 4);
-		// bad query syntax? - replace with *
-		assertFalse(s.findQuery(u.getType(), "AND").isEmpty());
-		assertFalse(s.findQuery(u.getType(), "AND ? OR").isEmpty());
-		assertFalse(s.findQuery(u.getType(), "? OR").isEmpty());
+		// Invalid query syntax must not fall back to a match-all query.
+		assertTrue(s.findQuery(u.getType(), "AND").isEmpty());
+		assertTrue(s.findQuery(u.getType(), "AND ? OR").isEmpty());
+		assertTrue(s.findQuery(u.getType(), "? OR").isEmpty());
 
 		Pager p = new Pager();
 		assertEquals(0, p.getCount());
